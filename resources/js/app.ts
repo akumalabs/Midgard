@@ -4,7 +4,6 @@ import { VueQueryPlugin } from '@tanstack/vue-query';
 import router from '@/router';
 import App from '@/App.vue';
 import '@/lib/axios';
-import '../../css/app.css';
 
 const app = createApp(App);
 
