@@ -137,6 +137,8 @@ php artisan key:generate --no-interaction --quiet
 # Update .env
 sed -i "s/APP_ENV=.*/APP_ENV=production/" .env
 sed -i "s/APP_DEBUG=.*/APP_DEBUG=false/" .env
+sed -i "s/DB_CONNECTION=.*/DB_CONNECTION=mysql/" .env
+sed -i "s/DB_HOST=.*/DB_HOST=127.0.0.1/" .env
 sed -i "s/DB_DATABASE=.*/DB_DATABASE=${DB_NAME}/" .env
 sed -i "s/DB_USERNAME=.*/DB_USERNAME=${DB_USER}/" .env
 sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=${DB_PASS}/" .env
@@ -205,7 +207,13 @@ ln -sf /etc/nginx/sites-available/midgard /etc/nginx/sites-enabled/
 systemctl restart php8.2-fpm
 systemctl restart nginx
 systemctl restart redis-server
-systemctl enable php8.2-fpm nginx redis-server mysql
+
+# Enable services (mariadb on Debian, mysql on Ubuntu)
+if [ "$OS" = "debian" ]; then
+    systemctl enable php8.2-fpm nginx redis-server mariadb
+else
+    systemctl enable php8.2-fpm nginx redis-server mysql
+fi
 
 # Output results
 echo ""
