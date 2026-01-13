@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { RouterLink, useRoute } from 'vue-router';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import {
     HomeIcon,
@@ -14,6 +14,7 @@ import {
 
 const authStore = useAuthStore();
 const route = useRoute();
+const router = useRouter();
 const sidebarOpen = ref(false);
 
 const navigation = [
@@ -27,6 +28,7 @@ const isActiveRoute = (routeName: string) => {
 
 async function handleLogout() {
     await authStore.logout();
+    router.push({ name: 'login' });
 }
 </script>
 
