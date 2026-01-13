@@ -25,7 +25,7 @@ const { data: nodes } = useQuery({
     queryFn: () => nodeApi.list(),
 });
 
-// Create Pool Modal (simple - just name and nodes)
+// Create Pool Modal
 const showCreateModal = ref(false);
 const editingPool = ref<AddressPool | null>(null);
 const createFormData = ref({
@@ -34,7 +34,7 @@ const createFormData = ref({
 });
 const createError = ref<string | null>(null);
 
-// Add IPs Modal (includes network settings)
+// Add IPs Modal
 const showAddModal = ref(false);
 const addingToPool = ref<AddressPool | null>(null);
 const addMode = ref<'range' | 'cidr' | 'single'>('range');
@@ -42,11 +42,9 @@ const addFormData = ref({
     addresses: '',
     start: '',
     end: '',
-    cidr: '',
+    cidr_input: '',
     gateway: '',
-    netmask: '255.255.255.0',
-    dns_primary: '8.8.8.8',
-    dns_secondary: '8.8.4.4',
+    cidr: 24,
 });
 const addError = ref<string | null>(null);
 
@@ -79,11 +77,9 @@ const openAddAddresses = (pool: AddressPool) => {
         addresses: '',
         start: '',
         end: '',
-        cidr: '',
-        gateway: pool.gateway || '',
-        netmask: pool.netmask || '255.255.255.0',
-        dns_primary: pool.dns_primary || '8.8.8.8',
-        dns_secondary: pool.dns_secondary || '8.8.4.4',
+        cidr_input: '',
+        gateway: '',
+        cidr: 24,
     };
     addError.value = null;
     showAddModal.value = true;
@@ -101,19 +97,15 @@ const openViewAddresses = async (pool: AddressPool) => {
     loadingAddresses.value = false;
 };
 
-// Create/Edit Pool mutation - simplified
+// Create/Edit Pool mutation
 const createMutation = useMutation({
     mutationFn: async () => {
-        const data: any = {
+        const data = {
             name: createFormData.value.name,
-            // Default network settings (will be set when adding IPs)
-            gateway: '0.0.0.0',
-            netmask: '255.255.255.0',
-            dns_primary: '8.8.8.8',
-            dns_secondary: '8.8.4.4',
+            node_ids: createFormData.value.node_ids,
         };
         if (editingPool.value) {
-            return addressPoolApi.update(editingPool.value.id, { name: createFormData.value.name });
+            return addressPoolApi.update(editingPool.value.id, data);
         } else {
             return addressPoolApi.create(data);
         }
@@ -127,37 +119,44 @@ const createMutation = useMutation({
     },
 });
 
-// Add addresses mutation - includes network settings update
+// Add addresses mutation
 const addAddressesMutation = useMutation({
     mutationFn: async () => {
         if (!addingToPool.value) return;
         
-        // First update pool with network settings
-        await addressPoolApi.update(addingToPool.value.id, {
-            gateway: addFormData.value.gateway,
-            netmask: addFormData.value.netmask,
-            dns_primary: addFormData.value.dns_primary,
-            dns_secondary: addFormData.value.dns_secondary,
-        });
-        
-        // Then add addresses
         if (addMode.value === 'range') {
-            return addressPoolApi.addRange(
-                addingToPool.value.id,
-                addFormData.value.start,
-                addFormData.value.end
-            );
+            // Add range
+            return addressPoolApi.addRange(addingToPool.value.id, {
+                start: addFormData.value.start,
+                end: addFormData.value.end,
+                cidr: addFormData.value.cidr,
+                gateway: addFormData.value.gateway,
+            });
         } else if (addMode.value === 'cidr') {
-            const addresses = parseCidr(addFormData.value.cidr);
-            if (addresses.length === 0) {
-                throw new Error('Invalid CIDR or no addresses to add');
+            // Parse CIDR and add as range
+            const { networkStart, networkEnd, cidr } = parseCidr(addFormData.value.cidr_input);
+            if (!networkStart || !networkEnd) {
+                throw new Error('Invalid CIDR notation');
             }
-            return addressPoolApi.addAddresses(addingToPool.value.id, addresses);
+            return addressPoolApi.addRange(addingToPool.value.id, {
+                start: networkStart,
+                end: networkEnd,
+                cidr: cidr,
+                gateway: addFormData.value.gateway,
+            });
         } else {
-            const addresses = addFormData.value.addresses
+            // Manual - add individual addresses
+            const ips = addFormData.value.addresses
                 .split('\n')
                 .map(a => a.trim())
                 .filter(a => a);
+            
+            const addresses = ips.map(ip => ({
+                address: ip,
+                cidr: addFormData.value.cidr,
+                gateway: addFormData.value.gateway,
+                type: 'ipv4',
+            }));
             return addressPoolApi.addAddresses(addingToPool.value.id, addresses);
         }
     },
@@ -172,8 +171,8 @@ const addAddressesMutation = useMutation({
 
 // Delete address mutation
 const deleteAddressMutation = useMutation({
-    mutationFn: async ({ poolId, addressId }: { poolId: number; addressId: number }) => {
-        return addressPoolApi.deleteAddress(poolId, addressId);
+    mutationFn: async (addressId: number) => {
+        return addressPoolApi.deleteAddress(addressId);
     },
     onSuccess: () => {
         if (viewingPool.value) {
@@ -198,11 +197,8 @@ const confirmDelete = (pool: AddressPool) => {
 };
 
 const confirmDeleteAddress = (address: Address) => {
-    if (confirm(`Delete IP ${address.ip_address}?`)) {
-        deleteAddressMutation.mutate({ 
-            poolId: viewingPool.value!.id, 
-            addressId: address.id 
-        });
+    if (confirm(`Delete IP ${address.address}?`)) {
+        deleteAddressMutation.mutate(address.id);
     }
 };
 
@@ -216,33 +212,31 @@ const handleAddAddresses = () => {
     addAddressesMutation.mutate();
 };
 
-// Parse CIDR notation to array of IPs
-function parseCidr(cidr: string): string[] {
+// Parse CIDR notation to get start/end IPs
+function parseCidr(cidr: string): { networkStart: string; networkEnd: string; cidr: number } {
     const [ip, prefix] = cidr.split('/');
-    if (!ip || !prefix) return [];
+    if (!ip || !prefix) return { networkStart: '', networkEnd: '', cidr: 24 };
     
     const prefixNum = parseInt(prefix);
     if (prefixNum < 24 || prefixNum > 30) {
         addError.value = 'CIDR prefix must be between /24 and /30';
-        return [];
+        return { networkStart: '', networkEnd: '', cidr: prefixNum };
     }
     
     const parts = ip.split('.').map(Number);
-    const addresses: string[] = [];
     const hostBits = 32 - prefixNum;
     const numHosts = Math.pow(2, hostBits) - 2;
     
     const baseNum = (parts[0] << 24) + (parts[1] << 16) + (parts[2] << 8) + parts[3];
     const networkNum = baseNum & (~0 << hostBits);
     
-    for (let i = 1; i <= numHosts; i++) {
-        const addr = networkNum + i;
-        addresses.push(
-            `${(addr >> 24) & 255}.${(addr >> 16) & 255}.${(addr >> 8) & 255}.${addr & 255}`
-        );
-    }
+    const startAddr = networkNum + 1;
+    const endAddr = networkNum + numHosts;
     
-    return addresses;
+    const networkStart = `${(startAddr >> 24) & 255}.${(startAddr >> 16) & 255}.${(startAddr >> 8) & 255}.${startAddr & 255}`;
+    const networkEnd = `${(endAddr >> 24) & 255}.${(endAddr >> 16) & 255}.${(endAddr >> 8) & 255}.${endAddr & 255}`;
+    
+    return { networkStart, networkEnd, cidr: prefixNum };
 }
 
 const toggleNode = (nodeId: number) => {
@@ -303,19 +297,10 @@ const toggleNode = (nodeId: number) => {
                     </div>
                 </div>
                 <div class="card-body space-y-3">
-                    <!-- Network Info -->
-                    <div v-if="pool.gateway && pool.gateway !== '0.0.0.0'" class="grid grid-cols-2 gap-2 text-sm">
-                        <div>
-                            <span class="text-secondary-400">Gateway:</span>
-                            <span class="text-white ml-2">{{ pool.gateway }}</span>
-                        </div>
-                        <div>
-                            <span class="text-secondary-400">Netmask:</span>
-                            <span class="text-white ml-2">{{ pool.netmask }}</span>
-                        </div>
-                    </div>
-                    <div v-else class="text-sm text-secondary-500 italic">
-                        Network settings will be configured when adding IPs
+                    <!-- Nodes -->
+                    <div v-if="pool.nodes?.length" class="text-sm">
+                        <span class="text-secondary-400">Nodes: </span>
+                        <span class="text-white">{{ pool.nodes.map(n => n.name).join(', ') }}</span>
                     </div>
                     
                     <div class="pt-3 border-t border-secondary-700">
@@ -334,7 +319,7 @@ const toggleNode = (nodeId: number) => {
             </div>
         </div>
 
-        <!-- Create/Edit Pool Modal (Simple) -->
+        <!-- Create/Edit Pool Modal -->
         <Teleport to="body">
             <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="fixed inset-0 bg-black/50" @click="showCreateModal = false"></div>
@@ -351,13 +336,13 @@ const toggleNode = (nodeId: number) => {
 
                         <div>
                             <label class="label">Pool Name</label>
-                            <input v-model="createFormData.name" type="text" class="input" required placeholder="e.g. IPv4 Public" />
+                            <input v-model="createFormData.name" type="text" class="input" required placeholder="e.g. Public IPv4" />
                         </div>
 
                         <!-- Node Assignment -->
                         <div v-if="nodes?.length">
                             <label class="label">Assign to Nodes (optional)</label>
-                            <div class="space-y-2 max-h-40 overflow-y-auto">
+                            <div class="space-y-2 max-h-40 overflow-y-auto border border-secondary-700 rounded p-2">
                                 <label 
                                     v-for="node in nodes" 
                                     :key="node.id" 
@@ -370,7 +355,6 @@ const toggleNode = (nodeId: number) => {
                                         class="rounded border-secondary-600"
                                     />
                                     <span class="text-white">{{ node.name }}</span>
-                                    <span class="text-secondary-500 text-sm">{{ node.fqdn }}</span>
                                 </label>
                             </div>
                         </div>
@@ -386,7 +370,7 @@ const toggleNode = (nodeId: number) => {
             </div>
         </Teleport>
 
-        <!-- Add Addresses Modal (with network settings) -->
+        <!-- Add Addresses Modal -->
         <Teleport to="body">
             <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="fixed inset-0 bg-black/50" @click="showAddModal = false"></div>
@@ -401,30 +385,15 @@ const toggleNode = (nodeId: number) => {
                             {{ addError }}
                         </div>
 
-                        <!-- Network Settings -->
-                        <div class="p-4 bg-secondary-800/50 rounded-lg space-y-4">
-                            <h4 class="text-sm font-medium text-secondary-300">Network Settings</h4>
-                            
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="label text-xs">Gateway</label>
-                                    <input v-model="addFormData.gateway" type="text" class="input" required placeholder="192.168.1.1" />
-                                </div>
-                                <div>
-                                    <label class="label text-xs">Netmask</label>
-                                    <input v-model="addFormData.netmask" type="text" class="input" required placeholder="255.255.255.0" />
-                                </div>
+                        <!-- Gateway -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="label">Gateway</label>
+                                <input v-model="addFormData.gateway" type="text" class="input" required placeholder="192.168.1.1" />
                             </div>
-
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="label text-xs">Primary DNS</label>
-                                    <input v-model="addFormData.dns_primary" type="text" class="input" required placeholder="8.8.8.8" />
-                                </div>
-                                <div>
-                                    <label class="label text-xs">Secondary DNS</label>
-                                    <input v-model="addFormData.dns_secondary" type="text" class="input" placeholder="8.8.4.4" />
-                                </div>
+                            <div>
+                                <label class="label">CIDR (prefix)</label>
+                                <input v-model.number="addFormData.cidr" type="number" class="input" min="1" max="32" required placeholder="24" />
                             </div>
                         </div>
 
@@ -444,7 +413,7 @@ const toggleNode = (nodeId: number) => {
                                     @click="addMode = 'cidr'" 
                                     :class="['btn-sm flex-1', addMode === 'cidr' ? 'btn-primary' : 'btn-secondary']"
                                 >
-                                    CIDR
+                                    CIDR Block
                                 </button>
                                 <button 
                                     type="button" 
@@ -468,16 +437,17 @@ const toggleNode = (nodeId: number) => {
                                     <input v-model="addFormData.end" type="text" class="input" required placeholder="192.168.1.50" />
                                 </div>
                             </div>
+                            <p class="text-xs text-secondary-500">Max 256 IPs per range</p>
                         </div>
 
                         <!-- CIDR input -->
                         <div v-else-if="addMode === 'cidr'" class="space-y-2">
                             <div>
-                                <label class="label">Subnet (CIDR)</label>
-                                <input v-model="addFormData.cidr" type="text" class="input" required placeholder="192.168.1.0/24" />
+                                <label class="label">Subnet (CIDR notation)</label>
+                                <input v-model="addFormData.cidr_input" type="text" class="input" required placeholder="192.168.1.0/24" />
                             </div>
                             <p class="text-xs text-secondary-500">
-                                Usable host IPs will be added (excludes network and broadcast). Supports /24 to /30
+                                All usable host IPs will be added. Supports /24 to /30
                             </p>
                         </div>
 
@@ -523,26 +493,28 @@ const toggleNode = (nodeId: number) => {
                             Loading...
                         </div>
                         <div v-else-if="!poolAddresses.length" class="text-center py-8 text-secondary-400">
-                            No IP addresses in this pool
+                            No IP addresses in this pool. Click "Add IPs" to add some.
                         </div>
                         <div v-else class="overflow-x-auto">
                             <table class="table">
                                 <thead>
                                     <tr>
                                         <th>IP Address</th>
+                                        <th>Gateway</th>
                                         <th>Status</th>
-                                        <th>Assigned To</th>
+                                        <th>Server</th>
                                         <th class="text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr v-for="addr in poolAddresses" :key="addr.id">
-                                        <td class="font-mono text-white">{{ addr.ip_address }}</td>
+                                        <td class="font-mono text-white">{{ addr.address }}/{{ addr.cidr }}</td>
+                                        <td class="font-mono text-secondary-400">{{ addr.gateway }}</td>
                                         <td>
                                             <span v-if="addr.server_id" class="badge-warning">In Use</span>
                                             <span v-else class="badge-success">Available</span>
                                         </td>
-                                        <td>{{ addr.server_id ? `Server #${addr.server_id}` : '-' }}</td>
+                                        <td>{{ addr.server?.name || '-' }}</td>
                                         <td class="text-right">
                                             <button 
                                                 v-if="!addr.server_id"

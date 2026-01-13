@@ -231,10 +231,5 @@ echo -e "${GREEN}║${NC}  Password   │  password                             
 echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "${YELLOW}⚠  Change the admin password immediately after login!${NC}"
-echo ""
-echo -e "Next steps:"
-echo -e "  1. Point your domain to ${SERVER_IP}"
-echo -e "  2. Run: ${CYAN}certbot --nginx -d yourdomain.com${NC}"
-echo -e "  3. Add your Proxmox nodes in Admin → Nodes"
-echo ""
+echo -e 
 echo -e "Documentation: ${BLUE}https://github.com/akumalabs/Midgard${NC}"

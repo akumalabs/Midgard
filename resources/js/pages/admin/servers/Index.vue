@@ -49,6 +49,7 @@ const formData = ref({
     hostname: '',
     user_id: '' as string | number,
     node_id: '' as string | number,
+    vmid: '' as string | number, // Custom VM ID
     template_vmid: '',
     cpu: 1,
     memory: 1024,
@@ -80,6 +81,7 @@ const openCreate = () => {
         hostname: '',
         user_id: '',
         node_id: '',
+        vmid: '',
         template_vmid: '',
         cpu: 1,
         memory: 1024,
@@ -107,6 +109,17 @@ const createMutation = useMutation({
             disk: formData.value.disk * 1024 * 1024,     // MB to bytes
             bandwidth_limit: formData.value.bandwidth_limit ? formData.value.bandwidth_limit * 1024 * 1024 * 1024 : null, // GB to bytes
         };
+        // Optional: custom VMID (if blank, Proxmox auto-assigns)
+        if (formData.value.vmid) {
+            data.vmid = Number(formData.value.vmid);
+        }
+        // IP assignment
+        if (formData.value.address_pool_id) {
+            data.address_pool_id = formData.value.address_pool_id;
+        }
+        if (formData.value.ip_address) {
+            data.ip_address = formData.value.ip_address;
+        }
         return adminServerApi.create(data);
     },
     onSuccess: () => {
@@ -279,61 +292,68 @@ const statusColor = (status: string) => {
                             {{ formError }}
                         </div>
 
-                        <!-- Basic Info -->
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="label">Server Name</label>
-                                <input v-model="formData.name" type="text" class="input" required placeholder="my-server" />
+                        <!-- Section: Basic Info -->
+                        <div class="p-4 bg-secondary-800/30 rounded-lg space-y-4">
+                            <h4 class="text-sm font-medium text-secondary-300 border-b border-secondary-700 pb-2">Server Details</h4>
+                            <div class="grid grid-cols-3 gap-4">
+                                <div class="col-span-2">
+                                    <label class="label">Server Name</label>
+                                    <input v-model="formData.name" type="text" class="input" required placeholder="my-server" />
+                                </div>
+                                <div>
+                                    <label class="label">VM ID</label>
+                                    <input v-model="formData.vmid" type="number" class="input" min="100" placeholder="Auto" />
+                                    <p class="text-xs text-secondary-500 mt-1">Leave blank for auto</p>
+                                </div>
                             </div>
                             <div>
                                 <label class="label">Hostname</label>
-                                <input v-model="formData.hostname" type="text" class="input" placeholder="server1.example.com" />
-                                <p class="text-xs text-secondary-500 mt-1">Leave blank to use server name</p>
+                                <input v-model="formData.hostname" type="text" class="input" placeholder="server1.example.com (defaults to server name)" />
                             </div>
                         </div>
 
-                        <!-- Owner & Node -->
-                        <div class="grid grid-cols-2 gap-4">
+                        <!-- Section: Assignment -->
+                        <div class="p-4 bg-secondary-800/30 rounded-lg space-y-4">
+                            <h4 class="text-sm font-medium text-secondary-300 border-b border-secondary-700 pb-2">Assignment</h4>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="label">Owner</label>
+                                    <select v-model="formData.user_id" class="input" required>
+                                        <option value="">Select user</option>
+                                        <option v-for="user in users" :key="user.id" :value="user.id">
+                                            {{ user.name }} ({{ user.email }})
+                                        </option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="label">Node</label>
+                                    <select v-model="formData.node_id" class="input" required>
+                                        <option value="">Select node</option>
+                                        <option v-for="node in nodes" :key="node.id" :value="node.id">
+                                            {{ node.name }} ({{ node.fqdn }})
+                                        </option>
+                                    </select>
+                                </div>
+                            </div>
                             <div>
-                                <label class="label">Owner</label>
-                                <select v-model="formData.user_id" class="input" required>
-                                    <option value="">Select user</option>
-                                    <option v-for="user in users" :key="user.id" :value="user.id">
-                                        {{ user.name }} ({{ user.email }})
-                                    </option>
+                                <label class="label">Template</label>
+                                <select v-model="formData.template_vmid" class="input" required :disabled="!formData.node_id">
+                                    <option value="">{{ formData.node_id ? (loadingTemplates ? 'Loading...' : 'Select template') : 'Select node first' }}</option>
+                                    <optgroup v-for="group in templateGroups" :key="group.id" :label="group.name">
+                                        <option v-for="template in group.templates" :key="template.id" :value="template.vmid">
+                                            {{ template.name }}
+                                        </option>
+                                    </optgroup>
                                 </select>
-                            </div>
-                            <div>
-                                <label class="label">Node</label>
-                                <select v-model="formData.node_id" class="input" required>
-                                    <option value="">Select node</option>
-                                    <option v-for="node in nodes" :key="node.id" :value="node.id">
-                                        {{ node.name }} ({{ node.fqdn }})
-                                    </option>
-                                </select>
+                                <p v-if="!templateGroups.length && formData.node_id && !loadingTemplates" class="text-xs text-warning-500 mt-1">
+                                    No templates found. Sync templates from Proxmox in the Nodes page.
+                                </p>
                             </div>
                         </div>
-
-                        <!-- Template -->
-                        <div>
-                            <label class="label">Template</label>
-                            <select v-model="formData.template_vmid" class="input" required :disabled="!formData.node_id">
-                                <option value="">{{ formData.node_id ? (loadingTemplates ? 'Loading...' : 'Select template') : 'Select node first' }}</option>
-                                <optgroup v-for="group in templateGroups" :key="group.id" :label="group.name">
-                                    <option v-for="template in group.templates" :key="template.id" :value="template.vmid">
-                                        {{ template.name }}
-                                    </option>
-                                </optgroup>
-                            </select>
-                            <p v-if="!templateGroups.length && formData.node_id && !loadingTemplates" class="text-xs text-warning-500 mt-1">
-                                No templates found. Sync templates from Proxmox in the Nodes page first.
-                            </p>
-                        </div>
-
-                        <!-- Resources -->
-                        <div>
-                            <label class="label text-secondary-400">Resources</label>
-                            <div class="grid grid-cols-3 gap-4">
+                        <!-- Section: Resources -->
+                        <div class="p-4 bg-secondary-800/30 rounded-lg space-y-4">
+                            <h4 class="text-sm font-medium text-secondary-300 border-b border-secondary-700 pb-2">Resources</h4>
+                            <div class="grid grid-cols-4 gap-4">
                                 <div>
                                     <label class="label text-xs">CPU Cores</label>
                                     <input v-model.number="formData.cpu" type="number" class="input" min="1" max="64" required />
@@ -346,30 +366,30 @@ const statusColor = (status: string) => {
                                     <label class="label text-xs">Disk (MB)</label>
                                     <input v-model.number="formData.disk" type="number" class="input" min="1024" step="1024" required />
                                 </div>
+                                <div>
+                                    <label class="label text-xs">Bandwidth (GB)</label>
+                                    <input v-model.number="formData.bandwidth_limit" type="number" class="input" min="0" placeholder="0 = unlimited" />
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Bandwidth -->
-                        <div>
-                            <label class="label">Bandwidth Limit (GB/month)</label>
-                            <input v-model.number="formData.bandwidth_limit" type="number" class="input" min="0" placeholder="0 = unlimited" />
-                            <p class="text-xs text-secondary-500 mt-1">Set to 0 for unlimited</p>
-                        </div>
-
-                        <!-- IP Address -->
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="label">IP Pool (optional)</label>
-                                <select v-model="formData.address_pool_id" class="input">
-                                    <option value="">No IP assignment</option>
-                                    <option v-for="pool in addressPools" :key="pool.id" :value="pool.id">
-                                        {{ pool.name }} ({{ pool.available_count || 0 }} available)
-                                    </option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="label">IP Address (manual)</label>
-                                <input v-model="formData.ip_address" type="text" class="input" placeholder="Auto-assign from pool" />
+                        <!-- Section: Network -->
+                        <div class="p-4 bg-secondary-800/30 rounded-lg space-y-4">
+                            <h4 class="text-sm font-medium text-secondary-300 border-b border-secondary-700 pb-2">Network</h4>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="label">IP Pool</label>
+                                    <select v-model="formData.address_pool_id" class="input">
+                                        <option value="">No auto IP assignment</option>
+                                        <option v-for="pool in addressPools" :key="pool.id" :value="pool.id">
+                                            {{ pool.name }} ({{ pool.available_count || 0 }} available)
+                                        </option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="label">Manual IP (optional)</label>
+                                    <input v-model="formData.ip_address" type="text" class="input" placeholder="Leave blank to auto-assign" />
+                                </div>
                             </div>
                         </div>
 
