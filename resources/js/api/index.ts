@@ -4,3 +4,4 @@ export * from './servers';
 export * from './locations';
 export * from './users';
 export * from './addressPools';
+export * from './templates';

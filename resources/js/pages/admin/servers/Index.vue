@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query';
-import { adminServerApi, nodeApi, userApi } from '@/api';
+import { adminServerApi, nodeApi, userApi, templateApi, addressPoolApi } from '@/api';
 import type { Server } from '@/types/models';
+import type { TemplateGroup } from '@/api/templates';
 import {
     PlusIcon,
     PlayIcon,
@@ -32,27 +33,70 @@ const { data: users } = useQuery({
     queryFn: () => userApi.list(),
 });
 
+// Fetch address pools
+const { data: addressPools } = useQuery({
+    queryKey: ['admin', 'address-pools'],
+    queryFn: () => addressPoolApi.list(),
+});
+
 // Modal state
 const showModal = ref(false);
+const selectedNodeId = ref<number | null>(null);
+const templateGroups = ref<TemplateGroup[]>([]);
+const loadingTemplates = ref(false);
+
 const formData = ref({
     name: '',
+    hostname: '',
     user_id: '' as string | number,
     node_id: '' as string | number,
+    template_vmid: '',
     cpu: 1,
-    memory: 1024, // 1GB in MB
-    disk: 10240,  // 10GB in MB
+    memory: 1024,
+    disk: 10240,
+    bandwidth_limit: 0,
+    ip_address: '',
+    address_pool_id: '' as string | number,
 });
 const formError = ref<string | null>(null);
+
+// Watch for node changes to load templates
+watch(() => formData.value.node_id, async (nodeId) => {
+    if (nodeId && typeof nodeId === 'number') {
+        loadingTemplates.value = true;
+        try {
+            templateGroups.value = await templateApi.listGroups(nodeId);
+        } catch (e) {
+            templateGroups.value = [];
+        }
+        loadingTemplates.value = false;
+    } else {
+        templateGroups.value = [];
+    }
+});
+
+// Computed: all templates flattened
+const allTemplates = computed(() => {
+    return templateGroups.value.flatMap(group => 
+        group.templates.map(t => ({ ...t, groupName: group.name }))
+    );
+});
 
 const openCreate = () => {
     formData.value = {
         name: '',
+        hostname: '',
         user_id: '',
         node_id: '',
+        template_vmid: '',
         cpu: 1,
         memory: 1024,
         disk: 10240,
+        bandwidth_limit: 0,
+        ip_address: '',
+        address_pool_id: '',
     };
+    templateGroups.value = [];
     formError.value = null;
     showModal.value = true;
 };
@@ -60,18 +104,25 @@ const openCreate = () => {
 // Create mutation
 const createMutation = useMutation({
     mutationFn: async () => {
-        return adminServerApi.create({
-            ...formData.value,
-            memory: formData.value.memory * 1024 * 1024, // Convert MB to bytes
-            disk: formData.value.disk * 1024 * 1024,     // Convert MB to bytes
-        });
+        const data: any = {
+            name: formData.value.name,
+            hostname: formData.value.hostname || formData.value.name,
+            user_id: formData.value.user_id,
+            node_id: formData.value.node_id,
+            template_vmid: formData.value.template_vmid,
+            cpu: formData.value.cpu,
+            memory: formData.value.memory * 1024 * 1024, // MB to bytes
+            disk: formData.value.disk * 1024 * 1024,     // MB to bytes
+            bandwidth_limit: formData.value.bandwidth_limit ? formData.value.bandwidth_limit * 1024 * 1024 * 1024 : null, // GB to bytes
+        };
+        return adminServerApi.create(data);
     },
     onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['admin', 'servers'] });
         showModal.value = false;
     },
     onError: (err: any) => {
-        formError.value = err?.response?.data?.message || 'Failed to create server';
+        formError.value = err?.response?.data?.message || err?.response?.data?.error || 'Failed to create server';
     },
 });
 
@@ -152,6 +203,7 @@ const statusColor = (status: string) => {
                 <table class="table">
                     <thead>
                         <tr>
+                            <th>VMID</th>
                             <th>Name</th>
                             <th>Status</th>
                             <th>User</th>
@@ -162,9 +214,10 @@ const statusColor = (status: string) => {
                     </thead>
                     <tbody>
                         <tr v-for="server in servers" :key="server.id">
+                            <td class="font-mono text-secondary-400">{{ server.vmid || '-' }}</td>
                             <td>
                                 <div class="font-medium text-white">{{ server.name }}</div>
-                                <div class="text-xs text-secondary-500">{{ server.uuid }}</div>
+                                <div class="text-xs text-secondary-500">{{ server.hostname }}</div>
                             </td>
                             <td>
                                 <span :class="statusColor(server.status)">{{ server.status }}</span>
@@ -224,7 +277,7 @@ const statusColor = (status: string) => {
         <Teleport to="body">
             <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="fixed inset-0 bg-black/50" @click="showModal = false"></div>
-                <div class="card relative z-10 w-full max-w-lg">
+                <div class="card relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                     <div class="card-header">
                         <h2 class="text-lg font-semibold text-white">Create Server</h2>
                     </div>
@@ -234,47 +287,97 @@ const statusColor = (status: string) => {
                             {{ formError }}
                         </div>
 
-                        <!-- Name -->
-                        <div>
-                            <label class="label">Server Name</label>
-                            <input v-model="formData.name" type="text" class="input" required placeholder="my-server" />
+                        <!-- Basic Info -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="label">Server Name</label>
+                                <input v-model="formData.name" type="text" class="input" required placeholder="my-server" />
+                            </div>
+                            <div>
+                                <label class="label">Hostname</label>
+                                <input v-model="formData.hostname" type="text" class="input" placeholder="server1.example.com" />
+                                <p class="text-xs text-secondary-500 mt-1">Leave blank to use server name</p>
+                            </div>
                         </div>
 
-                        <!-- User -->
-                        <div>
-                            <label class="label">Owner</label>
-                            <select v-model="formData.user_id" class="input" required>
-                                <option value="">Select a user</option>
-                                <option v-for="user in users" :key="user.id" :value="user.id">
-                                    {{ user.name }} ({{ user.email }})
-                                </option>
-                            </select>
+                        <!-- Owner & Node -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="label">Owner</label>
+                                <select v-model="formData.user_id" class="input" required>
+                                    <option value="">Select user</option>
+                                    <option v-for="user in users" :key="user.id" :value="user.id">
+                                        {{ user.name }} ({{ user.email }})
+                                    </option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="label">Node</label>
+                                <select v-model="formData.node_id" class="input" required>
+                                    <option value="">Select node</option>
+                                    <option v-for="node in nodes" :key="node.id" :value="node.id">
+                                        {{ node.name }} ({{ node.fqdn }})
+                                    </option>
+                                </select>
+                            </div>
                         </div>
 
-                        <!-- Node -->
+                        <!-- Template -->
                         <div>
-                            <label class="label">Node</label>
-                            <select v-model="formData.node_id" class="input" required>
-                                <option value="">Select a node</option>
-                                <option v-for="node in nodes" :key="node.id" :value="node.id">
-                                    {{ node.name }} ({{ node.fqdn }})
-                                </option>
+                            <label class="label">Template</label>
+                            <select v-model="formData.template_vmid" class="input" required :disabled="!formData.node_id">
+                                <option value="">{{ formData.node_id ? (loadingTemplates ? 'Loading...' : 'Select template') : 'Select node first' }}</option>
+                                <optgroup v-for="group in templateGroups" :key="group.id" :label="group.name">
+                                    <option v-for="template in group.templates" :key="template.id" :value="template.vmid">
+                                        {{ template.name }} (VMID: {{ template.vmid }})
+                                    </option>
+                                </optgroup>
                             </select>
+                            <p v-if="!templateGroups.length && formData.node_id && !loadingTemplates" class="text-xs text-warning-500 mt-1">
+                                No templates found. Sync templates from Proxmox in the Nodes page first.
+                            </p>
                         </div>
 
                         <!-- Resources -->
-                        <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="label text-secondary-400">Resources</label>
+                            <div class="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label class="label text-xs">CPU Cores</label>
+                                    <input v-model.number="formData.cpu" type="number" class="input" min="1" max="64" required />
+                                </div>
+                                <div>
+                                    <label class="label text-xs">Memory (MB)</label>
+                                    <input v-model.number="formData.memory" type="number" class="input" min="512" step="256" required />
+                                </div>
+                                <div>
+                                    <label class="label text-xs">Disk (MB)</label>
+                                    <input v-model.number="formData.disk" type="number" class="input" min="1024" step="1024" required />
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bandwidth -->
+                        <div>
+                            <label class="label">Bandwidth Limit (GB/month)</label>
+                            <input v-model.number="formData.bandwidth_limit" type="number" class="input" min="0" placeholder="0 = unlimited" />
+                            <p class="text-xs text-secondary-500 mt-1">Set to 0 for unlimited</p>
+                        </div>
+
+                        <!-- IP Address -->
+                        <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="label">CPU Cores</label>
-                                <input v-model.number="formData.cpu" type="number" class="input" min="1" max="32" required />
+                                <label class="label">IP Pool (optional)</label>
+                                <select v-model="formData.address_pool_id" class="input">
+                                    <option value="">No IP assignment</option>
+                                    <option v-for="pool in addressPools" :key="pool.id" :value="pool.id">
+                                        {{ pool.name }} ({{ pool.available_count || 0 }} available)
+                                    </option>
+                                </select>
                             </div>
                             <div>
-                                <label class="label">Memory (MB)</label>
-                                <input v-model.number="formData.memory" type="number" class="input" min="512" step="512" required />
-                            </div>
-                            <div>
-                                <label class="label">Disk (MB)</label>
-                                <input v-model.number="formData.disk" type="number" class="input" min="1024" step="1024" required />
+                                <label class="label">IP Address (manual)</label>
+                                <input v-model="formData.ip_address" type="text" class="input" placeholder="Auto-assign from pool" />
                             </div>
                         </div>
 
@@ -284,7 +387,7 @@ const statusColor = (status: string) => {
                                 Cancel
                             </button>
                             <button type="submit" :disabled="createMutation.isPending.value" class="btn-primary flex-1">
-                                {{ createMutation.isPending.value ? 'Creating...' : 'Create' }}
+                                {{ createMutation.isPending.value ? 'Creating...' : 'Create Server' }}
                             </button>
                         </div>
                     </form>
