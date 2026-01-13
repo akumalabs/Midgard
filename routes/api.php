@@ -69,8 +69,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Address Pools
         Route::apiResource('address-pools', AddressPoolController::class);
-        Route::post('/address-pools/{pool}/addresses', [AddressPoolController::class, 'addAddresses']);
-        Route::post('/address-pools/{pool}/range', [AddressPoolController::class, 'addRange']);
+        Route::post('/address-pools/{address_pool}/addresses', [AddressPoolController::class, 'addAddresses']);
+        Route::post('/address-pools/{address_pool}/range', [AddressPoolController::class, 'addRange']);
         Route::delete('/addresses/{address}', [AddressPoolController::class, 'destroyAddress']);
 
         // Activity Logs

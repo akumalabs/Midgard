@@ -108,7 +108,7 @@ class AddressPoolController extends Controller
     /**
      * Add addresses to a pool (bulk).
      */
-    public function addAddresses(Request $request, AddressPool $pool): JsonResponse
+    public function addAddresses(Request $request, AddressPool $address_pool): JsonResponse
     {
         $validated = $request->validate([
             'addresses' => ['required', 'array', 'min:1'],
@@ -121,7 +121,7 @@ class AddressPoolController extends Controller
 
         $created = [];
         foreach ($validated['addresses'] as $addrData) {
-            $address = $pool->addresses()->create([
+            $address = $address_pool->addresses()->create([
                 'address' => $addrData['address'],
                 'cidr' => $addrData['cidr'],
                 'gateway' => $addrData['gateway'],
@@ -140,7 +140,7 @@ class AddressPoolController extends Controller
     /**
      * Add address range (e.g., 192.168.1.10-192.168.1.20).
      */
-    public function addRange(Request $request, AddressPool $pool): JsonResponse
+    public function addRange(Request $request, AddressPool $address_pool): JsonResponse
     {
         $validated = $request->validate([
             'start' => ['required', 'ipv4'],
@@ -173,7 +173,7 @@ class AddressPoolController extends Controller
                 continue;
             }
 
-            $pool->addresses()->create([
+            $address_pool->addresses()->create([
                 'address' => $address,
                 'cidr' => $validated['cidr'],
                 'gateway' => $validated['gateway'],
