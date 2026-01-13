@@ -74,29 +74,36 @@ sudo apt install php8.2-{bcmath,curl,dom,mbstring,mysql,redis,xml,zip}
 
 ## Installation
 
-### Quick Install (Recommended)
+### One-Line Install (Ubuntu/Debian)
 
 ```bash
-# Install dependencies first (Ubuntu/Debian)
-sudo apt update
-sudo apt install -y php8.2-fpm php8.2-cli php8.2-mysql php8.2-redis \
-    php8.2-xml php8.2-curl php8.2-mbstring php8.2-zip php8.2-bcmath \
-    composer nodejs npm git mysql-server redis-server nginx
-
-# Run the installer
-git clone https://github.com/akumalabs/Midgard.git /var/www/midgard
-cd /var/www/midgard
-chmod +x install.sh
-./install.sh
+curl -sSL https://raw.githubusercontent.com/akumalabs/Midgard/main/install.sh | sudo bash
 ```
 
-The installer will:
-- Check requirements
-- Install dependencies
-- Configure database
-- Run migrations
-- Build frontend
-- Set permissions
+The installer automatically:
+- Installs PHP 8.2, MySQL, Redis, Nginx, Node.js
+- Creates and configures the database
+- Builds the frontend
+- Configures Nginx web server
+- Sets proper permissions
+
+After installation, you'll see:
+```
+╔═══════════════════════════════════════════════════════════╗
+║          Installation Complete!                           ║
+╠═══════════════════════════════════════════════════════════╣
+║  URL        │  http://YOUR_SERVER_IP                      ║
+║  Username   │  admin@midgard.local                        ║
+║  Password   │  password                                   ║
+╚═══════════════════════════════════════════════════════════╝
+```
+
+### SSL Setup (Optional)
+
+```bash
+apt install certbot python3-certbot-nginx -y
+certbot --nginx -d yourdomain.com
+```
 
 ### Manual Install
 

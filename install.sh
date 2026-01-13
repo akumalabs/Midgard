@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Midgard Installer Script
-# Usage: curl -sSL https://raw.githubusercontent.com/akumalabs/Midgard/main/install.sh | bash
+# Midgard Control Panel Installer
+# Usage: curl -sSL https://raw.githubusercontent.com/akumalabs/Midgard/main/install.sh | sudo bash
 
 set -e
 
@@ -10,18 +10,34 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+CYAN='\033[0;36m'
+NC='\033[0m'
 
-echo -e "${BLUE}"
-echo "╔══════════════════════════════════════════╗"
-echo "║         Midgard Installer v1.0           ║"
-echo "║    Proxmox VE Control Panel              ║"
-echo "╚══════════════════════════════════════════╝"
+# Variables
+INSTALL_DIR="/var/www/midgard"
+DB_NAME="midgard"
+DB_USER="midgard"
+DB_PASS=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
+ADMIN_PASS=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 12)
+
+# Banner
+clear
+echo -e "${CYAN}"
+echo "  __  __ _     _                     _ "
+echo " |  \/  (_)   | |                   | |"
+echo " | \  / |_  __| | __ _  __ _ _ __ __| |"
+echo " | |\/| | |/ _\` |/ _\` |/ _\` | '__/ _\` |"
+echo " | |  | | | (_| | (_| | (_| | | | (_| |"
+echo " |_|  |_|_|\__,_|\__, |\__,_|_|  \__,_|"
+echo "                  __/ |                "
+echo "                 |___/   Control Panel"
 echo -e "${NC}"
+echo ""
 
-# Check if running as root
-if [ "$EUID" -eq 0 ]; then
-    echo -e "${YELLOW}Warning: Running as root. Creating midgard user is recommended.${NC}"
+# Check root
+if [ "$EUID" -ne 0 ]; then
+    echo -e "${RED}Error: Please run as root (sudo)${NC}"
+    exit 1
 fi
 
 # Detect OS
@@ -30,148 +46,176 @@ if [ -f /etc/os-release ]; then
     OS=$ID
     VERSION=$VERSION_ID
 else
-    echo -e "${RED}Cannot detect OS. Exiting.${NC}"
+    echo -e "${RED}Error: Cannot detect OS${NC}"
     exit 1
 fi
 
-echo -e "${GREEN}Detected OS: $OS $VERSION${NC}"
+echo -e "${GREEN}➜${NC} Detected: $OS $VERSION"
 
-# Check requirements
-check_command() {
-    if command -v $1 &> /dev/null; then
-        echo -e "${GREEN}✓${NC} $1 found"
-        return 0
-    else
-        echo -e "${RED}✗${NC} $1 not found"
-        return 1
-    fi
-}
-
-echo ""
-echo "Checking requirements..."
-MISSING=0
-
-check_command php || MISSING=1
-check_command composer || MISSING=1
-check_command node || MISSING=1
-check_command npm || MISSING=1
-check_command git || MISSING=1
-
-if [ $MISSING -eq 1 ]; then
-    echo ""
-    echo -e "${YELLOW}Missing requirements. Install them with:${NC}"
-    echo ""
-    if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
-        echo "  sudo apt update"
-        echo "  sudo apt install -y php8.2-fpm php8.2-cli php8.2-mysql php8.2-redis \\"
-        echo "      php8.2-xml php8.2-curl php8.2-mbstring php8.2-zip php8.2-bcmath \\"
-        echo "      composer nodejs npm git"
-    fi
-    echo ""
-    read -p "Continue anyway? (y/n) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
-    fi
+# Only support Ubuntu/Debian
+if [[ "$OS" != "ubuntu" && "$OS" != "debian" ]]; then
+    echo -e "${RED}Error: Only Ubuntu and Debian are supported${NC}"
+    exit 1
 fi
 
-# Set installation directory
-DEFAULT_DIR="/var/www/midgard"
-read -p "Installation directory [$DEFAULT_DIR]: " INSTALL_DIR
-INSTALL_DIR=${INSTALL_DIR:-$DEFAULT_DIR}
+echo -e "${GREEN}➜${NC} Starting installation..."
+echo ""
 
-echo ""
-echo -e "${BLUE}Installing Midgard to $INSTALL_DIR${NC}"
-echo ""
+# Update system
+echo -e "${BLUE}[1/8]${NC} Updating system packages..."
+apt update -qq
+apt upgrade -y -qq
+
+# Install dependencies
+echo -e "${BLUE}[2/8]${NC} Installing PHP 8.2 and extensions..."
+apt install -y -qq software-properties-common curl gnupg2
+
+# Add PHP repository if needed
+if ! command -v php8.2 &> /dev/null; then
+    if [ "$OS" = "ubuntu" ]; then
+        add-apt-repository -y ppa:ondrej/php
+    else
+        echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list
+        curl -fsSL https://packages.sury.org/php/apt.gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/php.gpg
+    fi
+    apt update -qq
+fi
+
+apt install -y -qq php8.2-fpm php8.2-cli php8.2-mysql php8.2-redis \
+    php8.2-xml php8.2-curl php8.2-mbstring php8.2-zip php8.2-bcmath \
+    php8.2-gd php8.2-intl
+
+# Install other services
+echo -e "${BLUE}[3/8]${NC} Installing MySQL, Redis, and Nginx..."
+apt install -y -qq mysql-server redis-server nginx git unzip
+
+# Install Composer
+if ! command -v composer &> /dev/null; then
+    curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+fi
+
+# Install Node.js 18
+if ! command -v node &> /dev/null; then
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+    apt install -y -qq nodejs
+fi
+
+# Configure MySQL
+echo -e "${BLUE}[4/8]${NC} Configuring database..."
+mysql -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';"
+mysql -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost';"
+mysql -e "FLUSH PRIVILEGES;"
 
 # Clone repository
+echo -e "${BLUE}[5/8]${NC} Downloading Midgard..."
 if [ -d "$INSTALL_DIR" ]; then
-    echo -e "${YELLOW}Directory exists. Pulling latest...${NC}"
-    cd "$INSTALL_DIR"
-    git pull origin main
-else
-    echo "Cloning repository..."
-    sudo mkdir -p "$INSTALL_DIR"
-    sudo chown $USER:$USER "$INSTALL_DIR"
-    git clone https://github.com/akumalabs/Midgard.git "$INSTALL_DIR"
-    cd "$INSTALL_DIR"
+    rm -rf "$INSTALL_DIR"
 fi
+git clone -q https://github.com/akumalabs/Midgard.git "$INSTALL_DIR"
+cd "$INSTALL_DIR"
 
 # Install PHP dependencies
-echo ""
-echo "Installing PHP dependencies..."
-composer install --no-dev --optimize-autoloader --no-interaction
+echo -e "${BLUE}[6/8]${NC} Installing dependencies..."
+composer install --no-dev --optimize-autoloader --no-interaction --quiet
 
 # Install Node dependencies and build
-echo ""
-echo "Installing Node dependencies..."
-npm ci --silent
+npm ci --silent 2>/dev/null
+npm run build --silent 2>/dev/null
 
-echo ""
-echo "Building frontend..."
-npm run build
+# Configure Laravel
+echo -e "${BLUE}[7/8]${NC} Configuring application..."
+cp .env.example .env
+php artisan key:generate --no-interaction --quiet
 
-# Setup environment
-if [ ! -f .env ]; then
-    echo ""
-    echo "Setting up environment..."
-    cp .env.example .env
-    php artisan key:generate --no-interaction
-    
-    echo ""
-    echo -e "${YELLOW}Configure your database in .env file${NC}"
-    read -p "Database host [127.0.0.1]: " DB_HOST
-    DB_HOST=${DB_HOST:-127.0.0.1}
-    
-    read -p "Database name [midgard]: " DB_NAME
-    DB_NAME=${DB_NAME:-midgard}
-    
-    read -p "Database user [midgard]: " DB_USER
-    DB_USER=${DB_USER:-midgard}
-    
-    read -sp "Database password: " DB_PASS
-    echo ""
-    
-    # Update .env
-    sed -i "s/DB_HOST=.*/DB_HOST=$DB_HOST/" .env
-    sed -i "s/DB_DATABASE=.*/DB_DATABASE=$DB_NAME/" .env
-    sed -i "s/DB_USERNAME=.*/DB_USERNAME=$DB_USER/" .env
-    sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=$DB_PASS/" .env
-fi
+# Update .env
+sed -i "s/APP_ENV=.*/APP_ENV=production/" .env
+sed -i "s/APP_DEBUG=.*/APP_DEBUG=false/" .env
+sed -i "s/DB_DATABASE=.*/DB_DATABASE=${DB_NAME}/" .env
+sed -i "s/DB_USERNAME=.*/DB_USERNAME=${DB_USER}/" .env
+sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=${DB_PASS}/" .env
+sed -i "s/CACHE_STORE=.*/CACHE_STORE=redis/" .env
+sed -i "s/SESSION_DRIVER=.*/SESSION_DRIVER=redis/" .env
 
 # Run migrations
-echo ""
-echo "Running migrations..."
-php artisan migrate --force --seed
+php artisan migrate --force --seed --quiet
 
 # Set permissions
-echo ""
-echo "Setting permissions..."
-sudo chown -R www-data:www-data storage bootstrap/cache
-sudo chmod -R 775 storage bootstrap/cache
+chown -R www-data:www-data storage bootstrap/cache
+chmod -R 775 storage bootstrap/cache
 
 # Optimize
-echo ""
-echo "Optimizing..."
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-php artisan storage:link
+php artisan config:cache --quiet
+php artisan route:cache --quiet
+php artisan view:cache --quiet
+php artisan storage:link --quiet 2>/dev/null || true
 
+# Configure Nginx
+echo -e "${BLUE}[8/8]${NC} Configuring web server..."
+
+# Get server IP
+SERVER_IP=$(hostname -I | awk '{print $1}')
+
+cat > /etc/nginx/sites-available/midgard << 'NGINX'
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+    root /var/www/midgard/public;
+
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+    add_header X-XSS-Protection "1; mode=block";
+
+    index index.php;
+    charset utf-8;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+
+    error_page 404 /index.php;
+
+    location ~ \.php$ {
+        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}
+NGINX
+
+# Enable site
+rm -f /etc/nginx/sites-enabled/default
+ln -sf /etc/nginx/sites-available/midgard /etc/nginx/sites-enabled/
+
+# Restart services
+systemctl restart php8.2-fpm
+systemctl restart nginx
+systemctl restart redis-server
+systemctl enable php8.2-fpm nginx redis-server mysql
+
+# Output results
 echo ""
-echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║       Installation Complete!             ║${NC}"
-echo -e "${GREEN}╚══════════════════════════════════════════╝${NC}"
+echo -e "${GREEN}╔═══════════════════════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}║          Installation Complete!                           ║${NC}"
+echo -e "${GREEN}╠═══════════════════════════════════════════════════════════╣${NC}"
+echo -e "${GREEN}║${NC}  URL        │  http://${SERVER_IP}                          ${GREEN}║${NC}"
+echo -e "${GREEN}║${NC}  Username   │  admin@midgard.local                         ${GREEN}║${NC}"
+echo -e "${GREEN}║${NC}  Password   │  password                                    ${GREEN}║${NC}"
+echo -e "${GREEN}╚═══════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "Login credentials:"
-echo -e "  Admin: ${YELLOW}admin@midgard.local${NC} / ${YELLOW}password${NC}"
-echo -e "  User:  ${YELLOW}user@midgard.local${NC} / ${YELLOW}password${NC}"
+echo -e "${YELLOW}⚠  Change the admin password immediately after login!${NC}"
 echo ""
-echo -e "${RED}⚠ Change these passwords immediately!${NC}"
-echo ""
-echo "Next steps:"
-echo "  1. Configure Nginx (see DEPLOYMENT.md)"
-echo "  2. Setup SSL with Let's Encrypt"
-echo "  3. Add your Proxmox nodes"
+echo -e "Next steps:"
+echo -e "  1. Point your domain to ${SERVER_IP}"
+echo -e "  2. Run: ${CYAN}certbot --nginx -d yourdomain.com${NC}"
+echo -e "  3. Add your Proxmox nodes in Admin → Nodes"
 echo ""
 echo -e "Documentation: ${BLUE}https://github.com/akumalabs/Midgard${NC}"
