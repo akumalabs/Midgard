@@ -15,6 +15,7 @@ import AdminNodes from '@/pages/admin/nodes/Index.vue';
 import AdminServers from '@/pages/admin/servers/Index.vue';
 import AdminUsers from '@/pages/admin/users/Index.vue';
 import AdminLocations from '@/pages/admin/locations/Index.vue';
+import AdminAddressPools from '@/pages/admin/address-pools/Index.vue';
 
 // Client Pages
 import ClientDashboard from '@/pages/client/Dashboard.vue';
@@ -66,6 +67,11 @@ const routes = [
                 path: 'locations',
                 name: 'admin.locations',
                 component: AdminLocations,
+            },
+            {
+                path: 'address-pools',
+                name: 'admin.address-pools',
+                component: AdminAddressPools,
             },
         ],
     },

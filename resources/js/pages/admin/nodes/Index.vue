@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, reactive } from 'vue';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query';
 import { nodeApi, locationApi } from '@/api';
-import type { Node, Location } from '@/types/models';
+import type { Node } from '@/types/models';
 import {
     PlusIcon,
     ArrowPathIcon,
@@ -26,6 +26,9 @@ const { data: locations } = useQuery({
     queryFn: () => locationApi.list(),
 });
 
+// Store connection status per node (persists between navigations within session)
+const connectionStatus = reactive<Record<number, { success: boolean; message: string }>>({});
+
 // Modal state
 const showModal = ref(false);
 const editingNode = ref<Node | null>(null);
@@ -36,12 +39,11 @@ const formData = ref({
     token_id: '',
     token_secret: '',
     location_id: '' as string | number,
-    cpu: 0,
-    memory: 0,
-    disk: 0,
-    cpu_overallocation: 100,
-    memory_overallocation: 100,
-    disk_overallocation: 100,
+    storage: 'local',
+    network: 'vmbr0',
+    cpu_overallocate: 0,
+    memory_overallocate: 0,
+    disk_overallocate: 0,
 });
 const formError = ref<string | null>(null);
 
@@ -54,12 +56,11 @@ const openCreate = () => {
         token_id: '',
         token_secret: '',
         location_id: '',
-        cpu: 0,
-        memory: 0,
-        disk: 0,
-        cpu_overallocation: 100,
-        memory_overallocation: 100,
-        disk_overallocation: 100,
+        storage: 'local',
+        network: 'vmbr0',
+        cpu_overallocate: 0,
+        memory_overallocate: 0,
+        disk_overallocate: 0,
     };
     formError.value = null;
     showModal.value = true;
@@ -71,15 +72,14 @@ const openEdit = (node: Node) => {
         name: node.name,
         fqdn: node.fqdn,
         port: node.port,
-        token_id: node.token_id || '',
+        token_id: (node as any).token_id || '',
         token_secret: '', // Don't show existing secret
-        location_id: node.location_id || '',
-        cpu: node.cpu,
-        memory: node.memory,
-        disk: node.disk,
-        cpu_overallocation: node.cpu_overallocation,
-        memory_overallocation: node.memory_overallocation,
-        disk_overallocation: node.disk_overallocation,
+        location_id: (node as any).location_id || '',
+        storage: node.storage || 'local',
+        network: node.network || 'vmbr0',
+        cpu_overallocate: node.cpu_overallocate || 0,
+        memory_overallocate: node.memory_overallocate || 0,
+        disk_overallocate: node.disk_overallocate || 0,
     };
     formError.value = null;
     showModal.value = true;
@@ -114,16 +114,14 @@ const handleSubmit = () => {
 
 // Test connection mutation
 const testingNode = ref<number | null>(null);
-const testResult = ref<{ id: number; success: boolean; message: string } | null>(null);
 
 const testConnection = async (node: Node) => {
     testingNode.value = node.id;
-    testResult.value = null;
     try {
         const result = await nodeApi.testConnection(node.id);
-        testResult.value = { id: node.id, success: result.success, message: result.message };
+        connectionStatus[node.id] = { success: result.success, message: result.message };
     } catch (e: any) {
-        testResult.value = { id: node.id, success: false, message: e?.message || 'Connection failed' };
+        connectionStatus[node.id] = { success: false, message: e?.message || 'Connection failed' };
     } finally {
         testingNode.value = null;
     }
@@ -136,6 +134,9 @@ const syncNode = async (node: Node) => {
     try {
         await nodeApi.sync(node.id);
         queryClient.invalidateQueries({ queryKey: ['admin', 'nodes'] });
+        connectionStatus[node.id] = { success: true, message: 'Synced' };
+    } catch (e: any) {
+        connectionStatus[node.id] = { success: false, message: e?.message || 'Sync failed' };
     } finally {
         syncingNode.value = null;
     }
@@ -156,7 +157,7 @@ const confirmDelete = (node: Node) => {
 };
 
 const formatBytes = (bytes: number): string => {
-    if (bytes === 0) return '0 B';
+    if (!bytes || bytes === 0) return '0 B';
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -213,6 +214,7 @@ const formatBytes = (bytes: number): string => {
                             <th>Location</th>
                             <th>FQDN</th>
                             <th>Resources</th>
+                            <th>Config</th>
                             <th>Servers</th>
                             <th>Status</th>
                             <th class="text-right">Actions</th>
@@ -229,8 +231,13 @@ const formatBytes = (bytes: number): string => {
                             </td>
                             <td>{{ node.fqdn }}:{{ node.port }}</td>
                             <td class="text-sm">
-                                <div>CPU: {{ node.cpu }} cores</div>
+                                <div>CPU: {{ node.cpu || 0 }} cores</div>
                                 <div>RAM: {{ formatBytes(node.memory) }}</div>
+                                <div>Disk: {{ formatBytes(node.disk) }}</div>
+                            </td>
+                            <td class="text-sm">
+                                <div>Storage: {{ node.storage || 'local' }}</div>
+                                <div>Network: {{ node.network || 'vmbr0' }}</div>
                             </td>
                             <td>{{ node.servers_count ?? 0 }}</td>
                             <td>
@@ -238,15 +245,15 @@ const formatBytes = (bytes: number): string => {
                                     Maintenance
                                 </span>
                                 <template v-else>
-                                    <span v-if="testResult?.id === node.id && testResult.success" class="badge-success">
+                                    <span v-if="connectionStatus[node.id]?.success" class="badge-success">
                                         <CheckCircleIcon class="w-4 h-4 mr-1" />
                                         Connected
                                     </span>
-                                    <span v-else-if="testResult?.id === node.id && !testResult.success" class="badge-danger">
+                                    <span v-else-if="connectionStatus[node.id] && !connectionStatus[node.id].success" class="badge-danger">
                                         <XCircleIcon class="w-4 h-4 mr-1" />
                                         Error
                                     </span>
-                                    <span v-else class="badge-secondary">Unknown</span>
+                                    <span v-else class="badge-secondary">Not tested</span>
                                 </template>
                             </td>
                             <td class="text-right space-x-2">
@@ -338,6 +345,39 @@ const formatBytes = (bytes: number): string => {
                                     {{ loc.name }} ({{ loc.short_code }})
                                 </option>
                             </select>
+                        </div>
+
+                        <!-- Storage & Network -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="label">Storage</label>
+                                <input v-model="formData.storage" type="text" class="input" placeholder="local" />
+                                <p class="text-xs text-secondary-500 mt-1">e.g. local, local-lvm, ceph</p>
+                            </div>
+                            <div>
+                                <label class="label">Network Bridge</label>
+                                <input v-model="formData.network" type="text" class="input" placeholder="vmbr0" />
+                                <p class="text-xs text-secondary-500 mt-1">e.g. vmbr0, vmbr1</p>
+                            </div>
+                        </div>
+
+                        <!-- Overallocation -->
+                        <div>
+                            <label class="label text-secondary-400 text-sm">Resource Overallocation (%)</label>
+                            <div class="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label class="label text-xs">CPU</label>
+                                    <input v-model.number="formData.cpu_overallocate" type="number" class="input" min="0" max="500" />
+                                </div>
+                                <div>
+                                    <label class="label text-xs">Memory</label>
+                                    <input v-model.number="formData.memory_overallocate" type="number" class="input" min="0" max="500" />
+                                </div>
+                                <div>
+                                    <label class="label text-xs">Disk</label>
+                                    <input v-model.number="formData.disk_overallocate" type="number" class="input" min="0" max="500" />
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Buttons -->

@@ -8,9 +8,7 @@ import {
     UsersIcon,
     MapPinIcon,
     CpuChipIcon,
-    CircleStackIcon,
-    ChartBarIcon,
-    Cog6ToothIcon,
+    GlobeAltIcon,
     ArrowRightOnRectangleIcon,
     Bars3Icon,
     XMarkIcon,
@@ -25,6 +23,7 @@ const navigation = [
     { name: 'Dashboard', href: '/admin', icon: HomeIcon, routeName: 'admin.dashboard' },
     { name: 'Nodes', href: '/admin/nodes', icon: CpuChipIcon, routeName: 'admin.nodes' },
     { name: 'Servers', href: '/admin/servers', icon: ServerStackIcon, routeName: 'admin.servers' },
+    { name: 'IP Pools', href: '/admin/address-pools', icon: GlobeAltIcon, routeName: 'admin.address-pools' },
     { name: 'Locations', href: '/admin/locations', icon: MapPinIcon, routeName: 'admin.locations' },
     { name: 'Users', href: '/admin/users', icon: UsersIcon, routeName: 'admin.users' },
 ];
