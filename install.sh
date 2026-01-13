@@ -86,8 +86,14 @@ apt install -y -qq php8.2-fpm php8.2-cli php8.2-mysql php8.2-redis \
     php8.2-gd php8.2-intl
 
 # Install other services
-echo -e "${BLUE}[3/8]${NC} Installing MySQL, Redis, and Nginx..."
-apt install -y -qq mysql-server redis-server nginx git unzip
+echo -e "${BLUE}[3/8]${NC} Installing database, Redis, and Nginx..."
+
+# Debian uses MariaDB, Ubuntu uses MySQL
+if [ "$OS" = "debian" ]; then
+    apt install -y -qq mariadb-server redis-server nginx git unzip
+else
+    apt install -y -qq mysql-server redis-server nginx git unzip
+fi
 
 # Install Composer
 if ! command -v composer &> /dev/null; then
