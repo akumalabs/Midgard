@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Midgard Control Panel Installer
+# Midgard Control Panel Auto Installer
 # Usage: curl -sSL https://raw.githubusercontent.com/akumalabs/Midgard/main/install.sh | sudo bash
 
 set -e
