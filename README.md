@@ -31,21 +31,54 @@ A modern Proxmox VE control panel built with Laravel 12 and Vue 3.
 - TanStack Query (data fetching)
 - VeeValidate + Zod (form validation)
 
-## Requirements
+## Server Requirements
 
-- PHP 8.2+
-- Node.js 18+
-- Composer
-- MySQL 8+ / MariaDB 10.6+ / SQLite 3
-- Redis (optional)
+### Minimum Hardware
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| CPU | 1 core | 2+ cores |
+| RAM | 1 GB | 2+ GB |
+| Disk | 10 GB | 20+ GB SSD |
+
+### Software Requirements
+
+| Software | Version | Notes |
+|----------|---------|-------|
+| OS | Ubuntu 22.04 LTS / Debian 12 | Any Linux with systemd |
+| PHP | 8.2+ | With required extensions |
+| MySQL | 8.0+ | Or MariaDB 10.6+ |
+| Redis | 6.0+ | Optional, for cache/queue |
+| Nginx | 1.18+ | Or Apache 2.4+ |
+| Node.js | 18+ | For building frontend |
+| Composer | 2.0+ | PHP dependency manager |
+
+### Required PHP Extensions
+
+```
+bcmath, ctype, curl, dom, fileinfo, json, mbstring, 
+openssl, pdo, pdo_mysql, redis, tokenizer, xml, zip
+```
+
+Install on Ubuntu/Debian:
+```bash
+sudo apt install php8.2-{bcmath,curl,dom,mbstring,mysql,redis,xml,zip}
+```
+
+### Proxmox VE Requirements
+
+| Component | Requirement |
+|-----------|-------------|
+| Proxmox VE | 7.0+ (8.0+ recommended) |
+| API Access | API Token with VM.* privileges |
+| Network | Panel must reach Proxmox on port 8006 |
 
 ## Installation
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/yourorg/midgard.git
-cd midgard
+git clone https://github.com/akumalabs/Midgard.git
+cd Midgard
 ```
 
 ### 2. Install dependencies
