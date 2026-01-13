@@ -100,9 +100,9 @@ if ! command -v composer &> /dev/null; then
     curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 fi
 
-# Install Node.js 18
-if ! command -v node &> /dev/null; then
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+# Install Node.js 20 (Vite 7 requires Node 20+)
+if ! command -v node &> /dev/null || [[ $(node -v | cut -d. -f1 | tr -d 'v') -lt 20 ]]; then
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
     apt install -y -qq nodejs
 fi
 
