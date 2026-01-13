@@ -1,0 +1,409 @@
+<?php
+
+namespace App\Services\Proxmox;
+
+use App\Models\Node;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Http;
+
+class ProxmoxApiClient
+{
+    protected Node $node;
+    protected PendingRequest $client;
+
+    public function __construct(Node $node)
+    {
+        $this->node = $node;
+        $this->client = $this->createClient();
+    }
+
+    /**
+     * Create HTTP client with Proxmox authentication.
+     */
+    protected function createClient(): PendingRequest
+    {
+        return Http::baseUrl($this->node->getApiUrl())
+            ->withHeaders([
+                'Authorization' => "PVEAPIToken={$this->node->token_id}={$this->node->token_secret}",
+            ])
+            ->withOptions([
+                'verify' => false, // Proxmox often uses self-signed certs
+            ])
+            ->timeout(30);
+    }
+
+    /**
+     * Make a GET request to the Proxmox API.
+     */
+    public function get(string $path, array $query = []): array
+    {
+        $response = $this->client->get($path, $query);
+        return $this->handleResponse($response);
+    }
+
+    /**
+     * Make a POST request to the Proxmox API.
+     */
+    public function post(string $path, array $data = []): array
+    {
+        $response = $this->client->post($path, $data);
+        return $this->handleResponse($response);
+    }
+
+    /**
+     * Make a PUT request to the Proxmox API.
+     */
+    public function put(string $path, array $data = []): array
+    {
+        $response = $this->client->put($path, $data);
+        return $this->handleResponse($response);
+    }
+
+    /**
+     * Make a DELETE request to the Proxmox API.
+     */
+    public function delete(string $path, array $data = []): array
+    {
+        $response = $this->client->delete($path, $data);
+        return $this->handleResponse($response);
+    }
+
+    /**
+     * Handle the API response.
+     */
+    protected function handleResponse(Response $response): array
+    {
+        if (!$response->successful()) {
+            throw new ProxmoxApiException(
+                $response->json('errors') ?? $response->body(),
+                $response->status()
+            );
+        }
+
+        return $response->json('data') ?? [];
+    }
+
+    /**
+     * Get the node being used by this client.
+     */
+    public function getNode(): Node
+    {
+        return $this->node;
+    }
+
+    // =====================
+    // Node/Cluster Methods
+    // =====================
+
+    /**
+     * Get cluster status and resources.
+     */
+    public function getClusterStatus(): array
+    {
+        return $this->get('/cluster/status');
+    }
+
+    /**
+     * Get cluster resources (VMs, storage, etc).
+     */
+    public function getClusterResources(string $type = null): array
+    {
+        $query = $type ? ['type' => $type] : [];
+        return $this->get('/cluster/resources', $query);
+    }
+
+    /**
+     * Get node status.
+     */
+    public function getNodeStatus(string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        return $this->get("/nodes/{$nodeName}/status");
+    }
+
+    /**
+     * Get list of nodes in the cluster.
+     */
+    public function getNodes(): array
+    {
+        return $this->get('/nodes');
+    }
+
+    // =====================
+    // VM Methods
+    // =====================
+
+    /**
+     * Get list of VMs on a node.
+     */
+    public function getVMs(string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        return $this->get("/nodes/{$nodeName}/qemu");
+    }
+
+    /**
+     * Get VM status and configuration.
+     */
+    public function getVMStatus(int $vmid, string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        return $this->get("/nodes/{$nodeName}/qemu/{$vmid}/status/current");
+    }
+
+    /**
+     * Get VM configuration.
+     */
+    public function getVMConfig(int $vmid, string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        return $this->get("/nodes/{$nodeName}/qemu/{$vmid}/config");
+    }
+
+    /**
+     * Start a VM.
+     */
+    public function startVM(int $vmid, string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/start");
+    }
+
+    /**
+     * Stop a VM.
+     */
+    public function stopVM(int $vmid, string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/stop");
+    }
+
+    /**
+     * Shutdown a VM (graceful).
+     */
+    public function shutdownVM(int $vmid, string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/shutdown");
+    }
+
+    /**
+     * Reboot a VM.
+     */
+    public function rebootVM(int $vmid, string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/reboot");
+    }
+
+    /**
+     * Reset a VM (hard reboot).
+     */
+    public function resetVM(int $vmid, string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/reset");
+    }
+
+    /**
+     * Clone a VM from template.
+     */
+    public function cloneVM(int $templateVmid, int $newVmid, array $options = [], string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        $data = array_merge([
+            'newid' => $newVmid,
+            'full' => 1, // Full clone, not linked
+        ], $options);
+
+        return $this->post("/nodes/{$nodeName}/qemu/{$templateVmid}/clone", $data);
+    }
+
+    /**
+     * Delete a VM.
+     */
+    public function deleteVM(int $vmid, string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        return $this->delete("/nodes/{$nodeName}/qemu/{$vmid}");
+    }
+
+    /**
+     * Update VM configuration.
+     */
+    public function updateVMConfig(int $vmid, array $config, string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        return $this->put("/nodes/{$nodeName}/qemu/{$vmid}/config", $config);
+    }
+
+    // =====================
+    // Console Methods
+    // =====================
+
+    /**
+     * Get VNC proxy ticket for noVNC console.
+     */
+    public function getVNCProxy(int $vmid, string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/vncproxy", [
+            'websocket' => 1,
+        ]);
+    }
+
+    /**
+     * Get SPICE proxy ticket.
+     */
+    public function getSpiceProxy(int $vmid, string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/spiceproxy");
+    }
+
+    // =====================
+    // Storage Methods
+    // =====================
+
+    /**
+     * Get storage list on a node.
+     */
+    public function getStorage(string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        return $this->get("/nodes/{$nodeName}/storage");
+    }
+
+    /**
+     * Get storage content (ISOs, templates, etc).
+     */
+    public function getStorageContent(string $storage, string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        return $this->get("/nodes/{$nodeName}/storage/{$storage}/content");
+    }
+
+    // =====================
+    // Template Methods
+    // =====================
+
+    /**
+     * Get available templates (VMs marked as templates).
+     */
+    public function getTemplates(string $nodeName = null): array
+    {
+        $vms = $this->getVMs($nodeName);
+        return array_filter($vms, fn($vm) => ($vm['template'] ?? 0) === 1);
+    }
+
+    // =====================
+    // Backup Methods
+    // =====================
+
+    /**
+     * Create a backup of a VM.
+     */
+    public function createBackup(int $vmid, string $storage, string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        return $this->post("/nodes/{$nodeName}/vzdump", [
+            'vmid' => $vmid,
+            'storage' => $storage,
+            'mode' => 'snapshot',
+            'compress' => 'zstd',
+        ]);
+    }
+
+    /**
+     * Delete a backup.
+     */
+    public function deleteBackup(string $volid, string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        // Parse storage from volid (format: storage:backup/vzdump-qemu-XXX.vma.zst)
+        $parts = explode(':', $volid);
+        $storage = $parts[0];
+
+        return $this->delete("/nodes/{$nodeName}/storage/{$storage}/content/{$volid}");
+    }
+
+    /**
+     * Restore a VM from backup.
+     */
+    public function restoreBackup(int $vmid, string $archive, string $storage, string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        return $this->post("/nodes/{$nodeName}/qemu", [
+            'vmid' => $vmid,
+            'archive' => $archive,
+            'storage' => $storage,
+        ]);
+    }
+
+    // =====================
+    // Task Methods
+    // =====================
+
+    /**
+     * Get task status.
+     */
+    public function getTaskStatus(string $taskId, string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        return $this->get("/nodes/{$nodeName}/tasks/{$taskId}/status");
+    }
+
+    /**
+     * Wait for a task to complete.
+     */
+    public function waitForTask(string $taskId, int $timeout = 300, string $nodeName = null): array
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        $start = time();
+
+        while (time() - $start < $timeout) {
+            $status = $this->getTaskStatus($taskId, $nodeName);
+
+            if ($status['status'] === 'stopped') {
+                return $status;
+            }
+
+            sleep(2);
+        }
+
+        throw new ProxmoxApiException("Task {$taskId} timed out after {$timeout} seconds");
+    }
+
+    // =====================
+    // Helper Methods
+    // =====================
+
+    /**
+     * Get the Proxmox node name from the first node in cluster.
+     */
+    protected function getProxmoxNodeName(): string
+    {
+        // Use cluster name if set, otherwise get from API
+        if ($this->node->cluster) {
+            return $this->node->cluster;
+        }
+
+        // Get from API
+        $nodes = $this->getNodes();
+        if (empty($nodes)) {
+            throw new ProxmoxApiException('No nodes found in Proxmox cluster');
+        }
+
+        return $nodes[0]['node'];
+    }
+
+    /**
+     * Get next available VMID.
+     */
+    public function getNextVmid(): int
+    {
+        $response = $this->get('/cluster/nextid');
+        return (int) $response;
+    }
+}
