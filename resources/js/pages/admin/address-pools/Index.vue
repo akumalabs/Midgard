@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query';
-import { addressPoolApi } from '@/api';
+import { addressPoolApi, nodeApi } from '@/api';
 import type { AddressPool, Address } from '@/api/addressPools';
 import {
     PlusIcon,
@@ -19,27 +19,34 @@ const { data: pools, isLoading } = useQuery({
     queryFn: () => addressPoolApi.list(),
 });
 
-// Modal state
-const showModal = ref(false);
-const editingPool = ref<AddressPool | null>(null);
-const formData = ref({
-    name: '',
-    gateway: '',
-    netmask: '255.255.255.0',
-    dns_primary: '8.8.8.8',
-    dns_secondary: '8.8.4.4',
+// Fetch nodes for assignment
+const { data: nodes } = useQuery({
+    queryKey: ['admin', 'nodes'],
+    queryFn: () => nodeApi.list(),
 });
-const formError = ref<string | null>(null);
 
-// Add addresses modal
+// Create Pool Modal (simple - just name and nodes)
+const showCreateModal = ref(false);
+const editingPool = ref<AddressPool | null>(null);
+const createFormData = ref({
+    name: '',
+    node_ids: [] as number[],
+});
+const createError = ref<string | null>(null);
+
+// Add IPs Modal (includes network settings)
 const showAddModal = ref(false);
 const addingToPool = ref<AddressPool | null>(null);
-const addMode = ref<'range' | 'single' | 'cidr'>('range');
+const addMode = ref<'range' | 'cidr' | 'single'>('range');
 const addFormData = ref({
     addresses: '',
     start: '',
     end: '',
     cidr: '',
+    gateway: '',
+    netmask: '255.255.255.0',
+    dns_primary: '8.8.8.8',
+    dns_secondary: '8.8.4.4',
 });
 const addError = ref<string | null>(null);
 
@@ -51,33 +58,33 @@ const loadingAddresses = ref(false);
 
 const openCreate = () => {
     editingPool.value = null;
-    formData.value = {
-        name: '',
-        gateway: '',
-        netmask: '255.255.255.0',
-        dns_primary: '8.8.8.8',
-        dns_secondary: '8.8.4.4',
-    };
-    formError.value = null;
-    showModal.value = true;
+    createFormData.value = { name: '', node_ids: [] };
+    createError.value = null;
+    showCreateModal.value = true;
 };
 
 const openEdit = (pool: AddressPool) => {
     editingPool.value = pool;
-    formData.value = {
+    createFormData.value = {
         name: pool.name,
-        gateway: pool.gateway,
-        netmask: pool.netmask,
-        dns_primary: pool.dns_primary,
-        dns_secondary: pool.dns_secondary || '',
+        node_ids: pool.nodes?.map((n: any) => n.id) || [],
     };
-    formError.value = null;
-    showModal.value = true;
+    createError.value = null;
+    showCreateModal.value = true;
 };
 
 const openAddAddresses = (pool: AddressPool) => {
     addingToPool.value = pool;
-    addFormData.value = { addresses: '', start: '', end: '', cidr: '' };
+    addFormData.value = {
+        addresses: '',
+        start: '',
+        end: '',
+        cidr: '',
+        gateway: pool.gateway || '',
+        netmask: pool.netmask || '255.255.255.0',
+        dns_primary: pool.dns_primary || '8.8.8.8',
+        dns_secondary: pool.dns_secondary || '8.8.4.4',
+    };
     addError.value = null;
     showAddModal.value = true;
 };
@@ -94,29 +101,46 @@ const openViewAddresses = async (pool: AddressPool) => {
     loadingAddresses.value = false;
 };
 
-// Save mutation
-const saveMutation = useMutation({
+// Create/Edit Pool mutation - simplified
+const createMutation = useMutation({
     mutationFn: async () => {
+        const data: any = {
+            name: createFormData.value.name,
+            // Default network settings (will be set when adding IPs)
+            gateway: '0.0.0.0',
+            netmask: '255.255.255.0',
+            dns_primary: '8.8.8.8',
+            dns_secondary: '8.8.4.4',
+        };
         if (editingPool.value) {
-            return addressPoolApi.update(editingPool.value.id, formData.value);
+            return addressPoolApi.update(editingPool.value.id, { name: createFormData.value.name });
         } else {
-            return addressPoolApi.create(formData.value);
+            return addressPoolApi.create(data);
         }
     },
     onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['admin', 'address-pools'] });
-        showModal.value = false;
+        showCreateModal.value = false;
     },
     onError: (err: any) => {
-        formError.value = err?.response?.data?.message || 'Failed to save pool';
+        createError.value = err?.response?.data?.message || 'Failed to save pool';
     },
 });
 
-// Add addresses mutation
+// Add addresses mutation - includes network settings update
 const addAddressesMutation = useMutation({
     mutationFn: async () => {
         if (!addingToPool.value) return;
         
+        // First update pool with network settings
+        await addressPoolApi.update(addingToPool.value.id, {
+            gateway: addFormData.value.gateway,
+            netmask: addFormData.value.netmask,
+            dns_primary: addFormData.value.dns_primary,
+            dns_secondary: addFormData.value.dns_secondary,
+        });
+        
+        // Then add addresses
         if (addMode.value === 'range') {
             return addressPoolApi.addRange(
                 addingToPool.value.id,
@@ -124,8 +148,10 @@ const addAddressesMutation = useMutation({
                 addFormData.value.end
             );
         } else if (addMode.value === 'cidr') {
-            // Parse CIDR and generate addresses
             const addresses = parseCidr(addFormData.value.cidr);
+            if (addresses.length === 0) {
+                throw new Error('Invalid CIDR or no addresses to add');
+            }
             return addressPoolApi.addAddresses(addingToPool.value.id, addresses);
         } else {
             const addresses = addFormData.value.addresses
@@ -140,7 +166,7 @@ const addAddressesMutation = useMutation({
         showAddModal.value = false;
     },
     onError: (err: any) => {
-        addError.value = err?.response?.data?.message || 'Failed to add addresses';
+        addError.value = err?.response?.data?.message || err?.message || 'Failed to add addresses';
     },
 });
 
@@ -157,7 +183,7 @@ const deleteAddressMutation = useMutation({
     },
 });
 
-// Delete mutation
+// Delete pool mutation
 const deleteMutation = useMutation({
     mutationFn: (id: number) => addressPoolApi.delete(id),
     onSuccess: () => {
@@ -180,9 +206,9 @@ const confirmDeleteAddress = (address: Address) => {
     }
 };
 
-const handleSubmit = () => {
-    formError.value = null;
-    saveMutation.mutate();
+const handleCreate = () => {
+    createError.value = null;
+    createMutation.mutate();
 };
 
 const handleAddAddresses = () => {
@@ -204,7 +230,7 @@ function parseCidr(cidr: string): string[] {
     const parts = ip.split('.').map(Number);
     const addresses: string[] = [];
     const hostBits = 32 - prefixNum;
-    const numHosts = Math.pow(2, hostBits) - 2; // Exclude network and broadcast
+    const numHosts = Math.pow(2, hostBits) - 2;
     
     const baseNum = (parts[0] << 24) + (parts[1] << 16) + (parts[2] << 8) + parts[3];
     const networkNum = baseNum & (~0 << hostBits);
@@ -218,6 +244,15 @@ function parseCidr(cidr: string): string[] {
     
     return addresses;
 }
+
+const toggleNode = (nodeId: number) => {
+    const idx = createFormData.value.node_ids.indexOf(nodeId);
+    if (idx > -1) {
+        createFormData.value.node_ids.splice(idx, 1);
+    } else {
+        createFormData.value.node_ids.push(nodeId);
+    }
+};
 </script>
 
 <template>
@@ -268,7 +303,8 @@ function parseCidr(cidr: string): string[] {
                     </div>
                 </div>
                 <div class="card-body space-y-3">
-                    <div class="grid grid-cols-2 gap-2 text-sm">
+                    <!-- Network Info -->
+                    <div v-if="pool.gateway && pool.gateway !== '0.0.0.0'" class="grid grid-cols-2 gap-2 text-sm">
                         <div>
                             <span class="text-secondary-400">Gateway:</span>
                             <span class="text-white ml-2">{{ pool.gateway }}</span>
@@ -277,14 +313,9 @@ function parseCidr(cidr: string): string[] {
                             <span class="text-secondary-400">Netmask:</span>
                             <span class="text-white ml-2">{{ pool.netmask }}</span>
                         </div>
-                        <div>
-                            <span class="text-secondary-400">DNS 1:</span>
-                            <span class="text-white ml-2">{{ pool.dns_primary }}</span>
-                        </div>
-                        <div>
-                            <span class="text-secondary-400">DNS 2:</span>
-                            <span class="text-white ml-2">{{ pool.dns_secondary || '-' }}</span>
-                        </div>
+                    </div>
+                    <div v-else class="text-sm text-secondary-500 italic">
+                        Network settings will be configured when adding IPs
                     </div>
                     
                     <div class="pt-3 border-t border-secondary-700">
@@ -293,7 +324,7 @@ function parseCidr(cidr: string): string[] {
                                 <span class="text-success-500 font-medium">{{ pool.available_count ?? 0 }}</span>
                                 <span class="text-secondary-400"> / {{ pool.addresses_count ?? 0 }} available</span>
                             </div>
-                            <button @click="openAddAddresses(pool)" class="btn-secondary btn-sm">
+                            <button @click="openAddAddresses(pool)" class="btn-primary btn-sm">
                                 <PlusIcon class="w-4 h-4 mr-1" />
                                 Add IPs
                             </button>
@@ -303,52 +334,51 @@ function parseCidr(cidr: string): string[] {
             </div>
         </div>
 
-        <!-- Create/Edit Pool Modal -->
+        <!-- Create/Edit Pool Modal (Simple) -->
         <Teleport to="body">
-            <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-                <div class="fixed inset-0 bg-black/50" @click="showModal = false"></div>
+            <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div class="fixed inset-0 bg-black/50" @click="showCreateModal = false"></div>
                 <div class="card relative z-10 w-full max-w-md">
                     <div class="card-header">
                         <h2 class="text-lg font-semibold text-white">
                             {{ editingPool ? 'Edit Pool' : 'Create Pool' }}
                         </h2>
                     </div>
-                    <form @submit.prevent="handleSubmit" class="card-body space-y-4">
-                        <div v-if="formError" class="p-3 bg-danger-500/10 border border-danger-500/50 rounded text-danger-500 text-sm">
-                            {{ formError }}
+                    <form @submit.prevent="handleCreate" class="card-body space-y-4">
+                        <div v-if="createError" class="p-3 bg-danger-500/10 border border-danger-500/50 rounded text-danger-500 text-sm">
+                            {{ createError }}
                         </div>
 
                         <div>
                             <label class="label">Pool Name</label>
-                            <input v-model="formData.name" type="text" class="input" required placeholder="e.g. IPv4 Public" />
+                            <input v-model="createFormData.name" type="text" class="input" required placeholder="e.g. IPv4 Public" />
                         </div>
 
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="label">Gateway</label>
-                                <input v-model="formData.gateway" type="text" class="input" required placeholder="192.168.1.1" />
-                            </div>
-                            <div>
-                                <label class="label">Netmask</label>
-                                <input v-model="formData.netmask" type="text" class="input" required placeholder="255.255.255.0" />
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="label">Primary DNS</label>
-                                <input v-model="formData.dns_primary" type="text" class="input" required placeholder="8.8.8.8" />
-                            </div>
-                            <div>
-                                <label class="label">Secondary DNS</label>
-                                <input v-model="formData.dns_secondary" type="text" class="input" placeholder="8.8.4.4" />
+                        <!-- Node Assignment -->
+                        <div v-if="nodes?.length">
+                            <label class="label">Assign to Nodes (optional)</label>
+                            <div class="space-y-2 max-h-40 overflow-y-auto">
+                                <label 
+                                    v-for="node in nodes" 
+                                    :key="node.id" 
+                                    class="flex items-center gap-2 p-2 rounded hover:bg-secondary-800 cursor-pointer"
+                                >
+                                    <input 
+                                        type="checkbox" 
+                                        :checked="createFormData.node_ids.includes(node.id)"
+                                        @change="toggleNode(node.id)"
+                                        class="rounded border-secondary-600"
+                                    />
+                                    <span class="text-white">{{ node.name }}</span>
+                                    <span class="text-secondary-500 text-sm">{{ node.fqdn }}</span>
+                                </label>
                             </div>
                         </div>
 
                         <div class="flex gap-3 pt-4">
-                            <button type="button" @click="showModal = false" class="btn-secondary flex-1">Cancel</button>
-                            <button type="submit" :disabled="saveMutation.isPending.value" class="btn-primary flex-1">
-                                {{ saveMutation.isPending.value ? 'Saving...' : 'Save' }}
+                            <button type="button" @click="showCreateModal = false" class="btn-secondary flex-1">Cancel</button>
+                            <button type="submit" :disabled="createMutation.isPending.value" class="btn-primary flex-1">
+                                {{ createMutation.isPending.value ? 'Saving...' : 'Save' }}
                             </button>
                         </div>
                     </form>
@@ -356,11 +386,11 @@ function parseCidr(cidr: string): string[] {
             </div>
         </Teleport>
 
-        <!-- Add Addresses Modal -->
+        <!-- Add Addresses Modal (with network settings) -->
         <Teleport to="body">
             <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="fixed inset-0 bg-black/50" @click="showAddModal = false"></div>
-                <div class="card relative z-10 w-full max-w-md">
+                <div class="card relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto">
                     <div class="card-header">
                         <h2 class="text-lg font-semibold text-white">
                             Add IPs to {{ addingToPool?.name }}
@@ -371,33 +401,63 @@ function parseCidr(cidr: string): string[] {
                             {{ addError }}
                         </div>
 
+                        <!-- Network Settings -->
+                        <div class="p-4 bg-secondary-800/50 rounded-lg space-y-4">
+                            <h4 class="text-sm font-medium text-secondary-300">Network Settings</h4>
+                            
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="label text-xs">Gateway</label>
+                                    <input v-model="addFormData.gateway" type="text" class="input" required placeholder="192.168.1.1" />
+                                </div>
+                                <div>
+                                    <label class="label text-xs">Netmask</label>
+                                    <input v-model="addFormData.netmask" type="text" class="input" required placeholder="255.255.255.0" />
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="label text-xs">Primary DNS</label>
+                                    <input v-model="addFormData.dns_primary" type="text" class="input" required placeholder="8.8.8.8" />
+                                </div>
+                                <div>
+                                    <label class="label text-xs">Secondary DNS</label>
+                                    <input v-model="addFormData.dns_secondary" type="text" class="input" placeholder="8.8.4.4" />
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Mode selector -->
-                        <div class="flex gap-2">
-                            <button 
-                                type="button" 
-                                @click="addMode = 'range'" 
-                                :class="['btn-sm flex-1', addMode === 'range' ? 'btn-primary' : 'btn-secondary']"
-                            >
-                                IP Range
-                            </button>
-                            <button 
-                                type="button" 
-                                @click="addMode = 'cidr'" 
-                                :class="['btn-sm flex-1', addMode === 'cidr' ? 'btn-primary' : 'btn-secondary']"
-                            >
-                                CIDR
-                            </button>
-                            <button 
-                                type="button" 
-                                @click="addMode = 'single'" 
-                                :class="['btn-sm flex-1', addMode === 'single' ? 'btn-primary' : 'btn-secondary']"
-                            >
-                                Manual
-                            </button>
+                        <div>
+                            <label class="label">Add Method</label>
+                            <div class="flex gap-2">
+                                <button 
+                                    type="button" 
+                                    @click="addMode = 'range'" 
+                                    :class="['btn-sm flex-1', addMode === 'range' ? 'btn-primary' : 'btn-secondary']"
+                                >
+                                    IP Range
+                                </button>
+                                <button 
+                                    type="button" 
+                                    @click="addMode = 'cidr'" 
+                                    :class="['btn-sm flex-1', addMode === 'cidr' ? 'btn-primary' : 'btn-secondary']"
+                                >
+                                    CIDR
+                                </button>
+                                <button 
+                                    type="button" 
+                                    @click="addMode = 'single'" 
+                                    :class="['btn-sm flex-1', addMode === 'single' ? 'btn-primary' : 'btn-secondary']"
+                                >
+                                    Manual
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Range input -->
-                        <div v-if="addMode === 'range'" class="space-y-4">
+                        <div v-if="addMode === 'range'" class="space-y-2">
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
                                     <label class="label">Start IP</label>
@@ -408,18 +468,16 @@ function parseCidr(cidr: string): string[] {
                                     <input v-model="addFormData.end" type="text" class="input" required placeholder="192.168.1.50" />
                                 </div>
                             </div>
-                            <p class="text-xs text-secondary-500">All IPs in this range will be added</p>
                         </div>
 
                         <!-- CIDR input -->
-                        <div v-else-if="addMode === 'cidr'" class="space-y-4">
+                        <div v-else-if="addMode === 'cidr'" class="space-y-2">
                             <div>
-                                <label class="label">Subnet (CIDR notation)</label>
+                                <label class="label">Subnet (CIDR)</label>
                                 <input v-model="addFormData.cidr" type="text" class="input" required placeholder="192.168.1.0/24" />
                             </div>
                             <p class="text-xs text-secondary-500">
-                                All usable host IPs will be added (excludes network and broadcast).
-                                Supported: /24 to /30
+                                Usable host IPs will be added (excludes network and broadcast). Supports /24 to /30
                             </p>
                         </div>
 
@@ -438,7 +496,7 @@ function parseCidr(cidr: string): string[] {
                         <div class="flex gap-3 pt-4">
                             <button type="button" @click="showAddModal = false" class="btn-secondary flex-1">Cancel</button>
                             <button type="submit" :disabled="addAddressesMutation.isPending.value" class="btn-primary flex-1">
-                                {{ addAddressesMutation.isPending.value ? 'Adding...' : 'Add Addresses' }}
+                                {{ addAddressesMutation.isPending.value ? 'Adding...' : 'Add IPs' }}
                             </button>
                         </div>
                     </form>

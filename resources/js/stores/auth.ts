@@ -12,8 +12,9 @@ export interface User {
 }
 
 export const useAuthStore = defineStore('auth', () => {
-    // State
-    const user = ref<User | null>(null);
+    // State - hydrate from localStorage
+    const storedUser = localStorage.getItem('auth_user');
+    const user = ref<User | null>(storedUser ? JSON.parse(storedUser) : null);
     const token = ref<string | null>(localStorage.getItem('auth_token'));
     const loading = ref(false);
 
@@ -21,14 +22,24 @@ export const useAuthStore = defineStore('auth', () => {
     const isAuthenticated = computed(() => !!user.value && !!token.value);
     const isAdmin = computed(() => user.value?.is_admin ?? false);
 
+    // Helper to persist user
+    function persistUser(userData: User | null) {
+        user.value = userData;
+        if (userData) {
+            localStorage.setItem('auth_user', JSON.stringify(userData));
+        } else {
+            localStorage.removeItem('auth_user');
+        }
+    }
+
     // Actions
     async function login(email: string, password: string): Promise<void> {
         loading.value = true;
         try {
             const response = await api.post('/auth/login', { email, password });
             token.value = response.data.token;
-            user.value = response.data.user;
             localStorage.setItem('auth_token', response.data.token);
+            persistUser(response.data.user);
         } finally {
             loading.value = false;
         }
@@ -41,7 +52,7 @@ export const useAuthStore = defineStore('auth', () => {
         } catch {
             // Ignore errors on logout
         } finally {
-            user.value = null;
+            persistUser(null);
             token.value = null;
             localStorage.removeItem('auth_token');
             loading.value = false;
@@ -49,18 +60,21 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     async function checkAuth(): Promise<void> {
+        // If no token, clear user
         if (!token.value) {
-            user.value = null;
+            persistUser(null);
             return;
         }
 
+        // If we have cached user data, use it immediately
+        // Then validate with server in background
         loading.value = true;
         try {
             const response = await api.get('/auth/user');
-            user.value = response.data.data;
+            persistUser(response.data.data);
         } catch {
             // Token is invalid or expired
-            user.value = null;
+            persistUser(null);
             token.value = null;
             localStorage.removeItem('auth_token');
         } finally {
@@ -72,7 +86,7 @@ export const useAuthStore = defineStore('auth', () => {
         loading.value = true;
         try {
             const response = await api.patch('/auth/user', data);
-            user.value = response.data.data;
+            persistUser(response.data.data);
         } finally {
             loading.value = false;
         }
