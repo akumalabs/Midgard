@@ -132,9 +132,8 @@ npm run build --silent 2>/dev/null
 # Configure Laravel
 echo -e "${BLUE}[7/8]${NC} Configuring application..."
 cp .env.example .env
-php artisan key:generate --no-interaction --quiet
 
-# Update .env
+# Update .env BEFORE generating key
 sed -i "s/APP_ENV=.*/APP_ENV=production/" .env
 sed -i "s/APP_DEBUG=.*/APP_DEBUG=false/" .env
 sed -i "s/DB_CONNECTION=.*/DB_CONNECTION=mysql/" .env
@@ -144,6 +143,12 @@ sed -i "s/DB_USERNAME=.*/DB_USERNAME=${DB_USER}/" .env
 sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=${DB_PASS}/" .env
 sed -i "s/CACHE_STORE=.*/CACHE_STORE=redis/" .env
 sed -i "s/SESSION_DRIVER=.*/SESSION_DRIVER=redis/" .env
+
+# Generate key after .env is configured
+php artisan key:generate --no-interaction --quiet
+
+# Clear any cached config
+php artisan config:clear --quiet 2>/dev/null || true
 
 # Run migrations
 php artisan migrate --force --seed --quiet
