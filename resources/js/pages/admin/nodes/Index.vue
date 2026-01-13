@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query';
-import { nodeApi } from '@/api';
-import type { Node } from '@/types/models';
+import { nodeApi, locationApi } from '@/api';
+import type { Node, Location } from '@/types/models';
 import {
     PlusIcon,
     ArrowPathIcon,
@@ -19,6 +19,98 @@ const { data: nodes, isLoading, error } = useQuery({
     queryKey: ['admin', 'nodes'],
     queryFn: () => nodeApi.list(),
 });
+
+// Fetch locations for dropdown
+const { data: locations } = useQuery({
+    queryKey: ['admin', 'locations'],
+    queryFn: () => locationApi.list(),
+});
+
+// Modal state
+const showModal = ref(false);
+const editingNode = ref<Node | null>(null);
+const formData = ref({
+    name: '',
+    fqdn: '',
+    port: 8006,
+    token_id: '',
+    token_secret: '',
+    location_id: '' as string | number,
+    cpu: 0,
+    memory: 0,
+    disk: 0,
+    cpu_overallocation: 100,
+    memory_overallocation: 100,
+    disk_overallocation: 100,
+});
+const formError = ref<string | null>(null);
+
+const openCreate = () => {
+    editingNode.value = null;
+    formData.value = {
+        name: '',
+        fqdn: '',
+        port: 8006,
+        token_id: '',
+        token_secret: '',
+        location_id: '',
+        cpu: 0,
+        memory: 0,
+        disk: 0,
+        cpu_overallocation: 100,
+        memory_overallocation: 100,
+        disk_overallocation: 100,
+    };
+    formError.value = null;
+    showModal.value = true;
+};
+
+const openEdit = (node: Node) => {
+    editingNode.value = node;
+    formData.value = {
+        name: node.name,
+        fqdn: node.fqdn,
+        port: node.port,
+        token_id: node.token_id || '',
+        token_secret: '', // Don't show existing secret
+        location_id: node.location_id || '',
+        cpu: node.cpu,
+        memory: node.memory,
+        disk: node.disk,
+        cpu_overallocation: node.cpu_overallocation,
+        memory_overallocation: node.memory_overallocation,
+        disk_overallocation: node.disk_overallocation,
+    };
+    formError.value = null;
+    showModal.value = true;
+};
+
+// Save mutation
+const saveMutation = useMutation({
+    mutationFn: async () => {
+        const data: any = { ...formData.value };
+        if (!data.token_secret) delete data.token_secret;
+        if (!data.location_id) delete data.location_id;
+        
+        if (editingNode.value) {
+            return nodeApi.update(editingNode.value.id, data);
+        } else {
+            return nodeApi.create(data);
+        }
+    },
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['admin', 'nodes'] });
+        showModal.value = false;
+    },
+    onError: (err: any) => {
+        formError.value = err?.response?.data?.message || 'Failed to save node';
+    },
+});
+
+const handleSubmit = () => {
+    formError.value = null;
+    saveMutation.mutate();
+};
 
 // Test connection mutation
 const testingNode = ref<number | null>(null);
@@ -80,7 +172,7 @@ const formatBytes = (bytes: number): string => {
                 <h1 class="text-2xl font-bold text-white">Nodes</h1>
                 <p class="text-secondary-400">Manage your Proxmox nodes</p>
             </div>
-            <button class="btn-primary">
+            <button @click="openCreate" class="btn-primary">
                 <PlusIcon class="w-5 h-5 mr-2" />
                 Add Node
             </button>
@@ -105,7 +197,7 @@ const formatBytes = (bytes: number): string => {
             </div>
             <h3 class="text-lg font-medium text-white mb-2">No nodes yet</h3>
             <p class="text-secondary-400 mb-4">Get started by adding your first Proxmox node.</p>
-            <button class="btn-primary mx-auto">
+            <button @click="openCreate" class="btn-primary mx-auto">
                 <PlusIcon class="w-5 h-5 mr-2" />
                 Add Your First Node
             </button>
@@ -146,7 +238,6 @@ const formatBytes = (bytes: number): string => {
                                     Maintenance
                                 </span>
                                 <template v-else>
-                                    <!-- Test result -->
                                     <span v-if="testResult?.id === node.id && testResult.success" class="badge-success">
                                         <CheckCircleIcon class="w-4 h-4 mr-1" />
                                         Connected
@@ -176,7 +267,7 @@ const formatBytes = (bytes: number): string => {
                                 >
                                     <ArrowPathIcon :class="['w-4 h-4', syncingNode === node.id && 'animate-spin']" />
                                 </button>
-                                <button class="btn-ghost btn-sm" title="Edit">
+                                <button @click="openEdit(node)" class="btn-ghost btn-sm" title="Edit">
                                     <PencilIcon class="w-4 h-4" />
                                 </button>
                                 <button
@@ -192,5 +283,75 @@ const formatBytes = (bytes: number): string => {
                 </table>
             </div>
         </div>
+
+        <!-- Create/Edit Modal -->
+        <Teleport to="body">
+            <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div class="fixed inset-0 bg-black/50" @click="showModal = false"></div>
+                <div class="card relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                    <div class="card-header">
+                        <h2 class="text-lg font-semibold text-white">
+                            {{ editingNode ? 'Edit Node' : 'Add Node' }}
+                        </h2>
+                    </div>
+                    <form @submit.prevent="handleSubmit" class="card-body space-y-4">
+                        <!-- Error -->
+                        <div v-if="formError" class="p-3 bg-danger-500/10 border border-danger-500/50 rounded text-danger-500 text-sm">
+                            {{ formError }}
+                        </div>
+
+                        <!-- Name -->
+                        <div>
+                            <label class="label">Node Name</label>
+                            <input v-model="formData.name" type="text" class="input" required placeholder="e.g. pve1" />
+                        </div>
+
+                        <!-- FQDN & Port -->
+                        <div class="grid grid-cols-3 gap-4">
+                            <div class="col-span-2">
+                                <label class="label">FQDN / IP Address</label>
+                                <input v-model="formData.fqdn" type="text" class="input" required placeholder="pve1.example.com" />
+                            </div>
+                            <div>
+                                <label class="label">Port</label>
+                                <input v-model.number="formData.port" type="number" class="input" required />
+                            </div>
+                        </div>
+
+                        <!-- API Token -->
+                        <div>
+                            <label class="label">API Token ID</label>
+                            <input v-model="formData.token_id" type="text" class="input" required placeholder="root@pam!midgard" />
+                            <p class="text-xs text-secondary-500 mt-1">Format: user@realm!tokenname</p>
+                        </div>
+                        <div>
+                            <label class="label">API Token Secret {{ editingNode ? '(leave blank to keep current)' : '' }}</label>
+                            <input v-model="formData.token_secret" type="password" class="input" :required="!editingNode" />
+                        </div>
+
+                        <!-- Location -->
+                        <div>
+                            <label class="label">Location (optional)</label>
+                            <select v-model="formData.location_id" class="input">
+                                <option value="">Select a location</option>
+                                <option v-for="loc in locations" :key="loc.id" :value="loc.id">
+                                    {{ loc.name }} ({{ loc.short_code }})
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- Buttons -->
+                        <div class="flex gap-3 pt-4">
+                            <button type="button" @click="showModal = false" class="btn-secondary flex-1">
+                                Cancel
+                            </button>
+                            <button type="submit" :disabled="saveMutation.isPending.value" class="btn-primary flex-1">
+                                {{ saveMutation.isPending.value ? 'Saving...' : 'Save' }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </Teleport>
     </div>
 </template>
