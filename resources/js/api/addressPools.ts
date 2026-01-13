@@ -3,13 +3,9 @@ import api from '@/lib/axios';
 export interface AddressPool {
     id: number;
     name: string;
-    gateway?: string;
-    netmask?: string;
-    dns_primary?: string;
-    dns_secondary?: string;
     addresses_count?: number;
     available_count?: number;
-    nodes?: any[];
+    nodes?: { id: number; name: string }[];
     addresses?: Address[];
     created_at: string;
 }
@@ -20,6 +16,8 @@ export interface Address {
     cidr: number;
     gateway: string;
     type: string;
+    mac_address?: string;
+    is_primary?: boolean;
     server_id?: number;
     server?: { id: number; uuid: string; name: string };
 }
@@ -49,7 +47,7 @@ export const addressPoolApi = {
         await api.delete(`/admin/address-pools/${id}`);
     },
 
-    // Add individual addresses with full details
+    // Add single or multiple addresses
     async addAddresses(id: number, addresses: Array<{
         address: string;
         cidr: number;
@@ -69,12 +67,7 @@ export const addressPoolApi = {
         await api.post(`/admin/address-pools/${id}/range`, data);
     },
 
-    // Get addresses for a pool (uses show endpoint)
-    async getAddresses(id: number): Promise<Address[]> {
-        const response = await api.get(`/admin/address-pools/${id}`);
-        return response.data.data.addresses || [];
-    },
-
+    // Delete an address
     async deleteAddress(addressId: number): Promise<void> {
         await api.delete(`/admin/addresses/${addressId}`);
     },
