@@ -3,6 +3,7 @@ import { ref, reactive, onMounted } from 'vue';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query';
 import { nodeApi, locationApi, templateApi } from '@/api';
 import type { Node } from '@/types/models';
+import type { TemplateGroup } from '@/api/templates';
 import {
     PlusIcon,
     ArrowPathIcon,
@@ -11,6 +12,7 @@ import {
     TrashIcon,
     PencilIcon,
     CloudArrowDownIcon,
+    ListBulletIcon,
 } from '@heroicons/vue/24/outline';
 
 const queryClient = useQueryClient();
@@ -171,12 +173,38 @@ const syncTemplates = async (node: Node) => {
     syncingTemplates.value = node.id;
     try {
         await templateApi.syncFromProxmox(node.id);
+        // Reload templates view if open
+        if (viewingTemplatesNode.value?.id === node.id) {
+            await loadTemplates(node);
+        }
         alert(`Templates synced for ${node.name}!`);
     } catch (e: any) {
         alert(`Failed to sync templates: ${e?.response?.data?.error || e?.message}`);
     } finally {
         syncingTemplates.value = null;
     }
+};
+
+// View templates modal
+const showTemplatesModal = ref(false);
+const viewingTemplatesNode = ref<Node | null>(null);
+const nodeTemplates = ref<TemplateGroup[]>([]);
+const loadingNodeTemplates = ref(false);
+
+const loadTemplates = async (node: Node) => {
+    loadingNodeTemplates.value = true;
+    try {
+        nodeTemplates.value = await templateApi.listGroups(node.id);
+    } catch (e) {
+        nodeTemplates.value = [];
+    }
+    loadingNodeTemplates.value = false;
+};
+
+const viewTemplates = async (node: Node) => {
+    viewingTemplatesNode.value = node;
+    showTemplatesModal.value = true;
+    await loadTemplates(node);
 };
 
 // Delete mutation
@@ -320,6 +348,13 @@ const formatBytes = (bytes: number): string => {
                                     <CloudArrowDownIcon v-if="syncingTemplates !== node.id" class="w-4 h-4" />
                                     <ArrowPathIcon v-else class="w-4 h-4 animate-spin" />
                                 </button>
+                                <button
+                                    @click="viewTemplates(node)"
+                                    class="btn-ghost btn-sm text-success-500"
+                                    title="View Templates"
+                                >
+                                    <ListBulletIcon class="w-4 h-4" />
+                                </button>
                                 <button @click="openEdit(node)" class="btn-ghost btn-sm" title="Edit">
                                     <PencilIcon class="w-4 h-4" />
                                 </button>
@@ -436,6 +471,61 @@ const formatBytes = (bytes: number): string => {
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+        </Teleport>
+
+        <!-- View Templates Modal -->
+        <Teleport to="body">
+            <div v-if="showTemplatesModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div class="fixed inset-0 bg-black/50" @click="showTemplatesModal = false"></div>
+                <div class="card relative z-10 w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+                    <div class="card-header flex items-center justify-between">
+                        <h2 class="text-lg font-semibold text-white">
+                            Templates on {{ viewingTemplatesNode?.name }}
+                        </h2>
+                        <button 
+                            @click="() => { syncTemplates(viewingTemplatesNode!); }"
+                            :disabled="syncingTemplates === viewingTemplatesNode?.id"
+                            class="btn-primary btn-sm"
+                        >
+                            <CloudArrowDownIcon v-if="syncingTemplates !== viewingTemplatesNode?.id" class="w-4 h-4 mr-1" />
+                            <ArrowPathIcon v-else class="w-4 h-4 mr-1 animate-spin" />
+                            Sync Templates
+                        </button>
+                    </div>
+                    <div class="card-body overflow-y-auto">
+                        <div v-if="loadingNodeTemplates" class="text-center py-8 text-secondary-400">
+                            Loading templates...
+                        </div>
+                        <div v-else-if="!nodeTemplates.length" class="text-center py-8 text-secondary-400">
+                            No templates found. Click "Sync Templates" to import from Proxmox.
+                        </div>
+                        <div v-else class="space-y-4">
+                            <div v-for="group in nodeTemplates" :key="group.id">
+                                <h3 class="text-sm font-medium text-secondary-400 mb-2">{{ group.name }}</h3>
+                                <div class="overflow-x-auto">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>VMID</th>
+                                                <th>Template Name</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="template in group.templates" :key="template.id">
+                                                <td class="font-mono text-primary-400">{{ template.vmid }}</td>
+                                                <td class="text-white">{{ template.name }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <button @click="showTemplatesModal = false" class="btn-secondary w-full">Close</button>
+                    </div>
                 </div>
             </div>
         </Teleport>

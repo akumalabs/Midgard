@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, watch } from 'vue';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query';
 import { adminServerApi, nodeApi, userApi, templateApi, addressPoolApi } from '@/api';
 import type { Server } from '@/types/models';
@@ -41,7 +41,6 @@ const { data: addressPools } = useQuery({
 
 // Modal state
 const showModal = ref(false);
-const selectedNodeId = ref<number | null>(null);
 const templateGroups = ref<TemplateGroup[]>([]);
 const loadingTemplates = ref(false);
 
@@ -73,13 +72,6 @@ watch(() => formData.value.node_id, async (nodeId) => {
     } else {
         templateGroups.value = [];
     }
-});
-
-// Computed: all templates flattened
-const allTemplates = computed(() => {
-    return templateGroups.value.flatMap(group => 
-        group.templates.map(t => ({ ...t, groupName: group.name }))
-    );
 });
 
 const openCreate = () => {
@@ -329,7 +321,7 @@ const statusColor = (status: string) => {
                                 <option value="">{{ formData.node_id ? (loadingTemplates ? 'Loading...' : 'Select template') : 'Select node first' }}</option>
                                 <optgroup v-for="group in templateGroups" :key="group.id" :label="group.name">
                                     <option v-for="template in group.templates" :key="template.id" :value="template.vmid">
-                                        {{ template.name }} (VMID: {{ template.vmid }})
+                                        {{ template.name }}
                                     </option>
                                 </optgroup>
                             </select>

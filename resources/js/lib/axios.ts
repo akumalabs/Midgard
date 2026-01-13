@@ -30,10 +30,16 @@ api.interceptors.request.use(
 api.interceptors.response.use(
     (response) => response,
     (error) => {
-        // Handle 401 Unauthorized
+        // Handle 401 Unauthorized - but don't redirect if already on login or checking auth
         if (error.response?.status === 401) {
-            localStorage.removeItem('auth_token');
-            window.location.href = '/auth/login';
+            const isAuthEndpoint = error.config?.url?.includes('/auth/');
+            if (!isAuthEndpoint) {
+                localStorage.removeItem('auth_token');
+                // Only redirect if not already on login page
+                if (!window.location.pathname.includes('/auth/login')) {
+                    window.location.href = '/auth/login';
+                }
+            }
         }
 
         // Handle 403 Forbidden
@@ -44,7 +50,7 @@ api.interceptors.response.use(
         // Handle 422 Validation errors
         if (error.response?.status === 422) {
             // Return the validation errors
-            return Promise.reject(error.response.data);
+            return Promise.reject(error);
         }
 
         // Handle 500 Server errors
