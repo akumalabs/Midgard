@@ -74,21 +74,50 @@ sudo apt install php8.2-{bcmath,curl,dom,mbstring,mysql,redis,xml,zip}
 
 ## Installation
 
-### 1. Clone the repository
+### Quick Install (Recommended)
+
+```bash
+# Install dependencies first (Ubuntu/Debian)
+sudo apt update
+sudo apt install -y php8.2-fpm php8.2-cli php8.2-mysql php8.2-redis \
+    php8.2-xml php8.2-curl php8.2-mbstring php8.2-zip php8.2-bcmath \
+    composer nodejs npm git mysql-server redis-server nginx
+
+# Run the installer
+git clone https://github.com/akumalabs/Midgard.git /var/www/midgard
+cd /var/www/midgard
+chmod +x install.sh
+./install.sh
+```
+
+The installer will:
+- Check requirements
+- Install dependencies
+- Configure database
+- Run migrations
+- Build frontend
+- Set permissions
+
+### Manual Install
+
+<details>
+<summary>Click to expand manual installation steps</summary>
+
+#### 1. Clone the repository
 
 ```bash
 git clone https://github.com/akumalabs/Midgard.git
 cd Midgard
 ```
 
-### 2. Install dependencies
+#### 2. Install dependencies
 
 ```bash
 composer install
 npm install
 ```
 
-### 3. Configure environment
+#### 3. Configure environment
 
 ```bash
 cp .env.example .env
@@ -100,7 +129,7 @@ Edit `.env` and configure:
 - App URL
 - Redis (optional)
 
-### 4. Run migrations
+#### 4. Run migrations
 
 ```bash
 php artisan migrate --seed
@@ -110,19 +139,21 @@ This creates:
 - Admin user: `admin@midgard.local` / `password`
 - Demo user: `user@midgard.local` / `password`
 
-### 5. Build frontend
+#### 5. Build frontend
 
 ```bash
 npm run build
 ```
 
-### 6. Start the server
+#### 6. Start the server
 
 ```bash
 php artisan serve
 ```
 
 Visit `http://localhost:8000`
+
+</details>
 
 ## Development
 
