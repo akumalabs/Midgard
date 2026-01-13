@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query';
-import { nodeApi, locationApi } from '@/api';
+import { nodeApi, locationApi, templateApi } from '@/api';
 import type { Node } from '@/types/models';
 import {
     PlusIcon,
@@ -10,6 +10,7 @@ import {
     XCircleIcon,
     TrashIcon,
     PencilIcon,
+    CloudArrowDownIcon,
 } from '@heroicons/vue/24/outline';
 
 const queryClient = useQueryClient();
@@ -26,8 +27,26 @@ const { data: locations } = useQuery({
     queryFn: () => locationApi.list(),
 });
 
-// Store connection status per node (persists between navigations within session)
+// Store connection status per node - persist to localStorage
 const connectionStatus = reactive<Record<number, { success: boolean; message: string }>>({});
+
+// Load from localStorage on mount
+onMounted(() => {
+    const saved = localStorage.getItem('midgard_node_status');
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved);
+            Object.assign(connectionStatus, parsed);
+        } catch (e) {
+            // ignore
+        }
+    }
+});
+
+// Save to localStorage whenever status changes
+const saveStatus = () => {
+    localStorage.setItem('midgard_node_status', JSON.stringify(connectionStatus));
+};
 
 // Modal state
 const showModal = ref(false);
@@ -120,14 +139,16 @@ const testConnection = async (node: Node) => {
     try {
         const result = await nodeApi.testConnection(node.id);
         connectionStatus[node.id] = { success: result.success, message: result.message };
+        saveStatus();
     } catch (e: any) {
         connectionStatus[node.id] = { success: false, message: e?.message || 'Connection failed' };
+        saveStatus();
     } finally {
         testingNode.value = null;
     }
 };
 
-// Sync mutation
+// Sync resources mutation
 const syncingNode = ref<number | null>(null);
 const syncNode = async (node: Node) => {
     syncingNode.value = node.id;
@@ -135,10 +156,26 @@ const syncNode = async (node: Node) => {
         await nodeApi.sync(node.id);
         queryClient.invalidateQueries({ queryKey: ['admin', 'nodes'] });
         connectionStatus[node.id] = { success: true, message: 'Synced' };
+        saveStatus();
     } catch (e: any) {
         connectionStatus[node.id] = { success: false, message: e?.message || 'Sync failed' };
+        saveStatus();
     } finally {
         syncingNode.value = null;
+    }
+};
+
+// Sync templates mutation
+const syncingTemplates = ref<number | null>(null);
+const syncTemplates = async (node: Node) => {
+    syncingTemplates.value = node.id;
+    try {
+        await templateApi.syncFromProxmox(node.id);
+        alert(`Templates synced for ${node.name}!`);
+    } catch (e: any) {
+        alert(`Failed to sync templates: ${e?.response?.data?.error || e?.message}`);
+    } finally {
+        syncingTemplates.value = null;
     }
 };
 
@@ -256,7 +293,7 @@ const formatBytes = (bytes: number): string => {
                                     <span v-else class="badge-secondary">Not tested</span>
                                 </template>
                             </td>
-                            <td class="text-right space-x-2">
+                            <td class="text-right space-x-1">
                                 <button
                                     @click="testConnection(node)"
                                     :disabled="testingNode === node.id"
@@ -273,6 +310,15 @@ const formatBytes = (bytes: number): string => {
                                     title="Sync Resources"
                                 >
                                     <ArrowPathIcon :class="['w-4 h-4', syncingNode === node.id && 'animate-spin']" />
+                                </button>
+                                <button
+                                    @click="syncTemplates(node)"
+                                    :disabled="syncingTemplates === node.id"
+                                    class="btn-ghost btn-sm text-primary-500"
+                                    title="Sync Templates from Proxmox"
+                                >
+                                    <CloudArrowDownIcon v-if="syncingTemplates !== node.id" class="w-4 h-4" />
+                                    <ArrowPathIcon v-else class="w-4 h-4 animate-spin" />
                                 </button>
                                 <button @click="openEdit(node)" class="btn-ghost btn-sm" title="Edit">
                                     <PencilIcon class="w-4 h-4" />
