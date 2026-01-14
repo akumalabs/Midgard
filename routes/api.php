@@ -97,6 +97,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/servers/{uuid}/snapshots', [ClientServerController::class, 'createSnapshot']);
         Route::post('/servers/{uuid}/snapshots/{name}/rollback', [ClientServerController::class, 'rollbackSnapshot']);
         Route::delete('/servers/{uuid}/snapshots/{name}', [ClientServerController::class, 'deleteSnapshot']);
+        
+        // Reinstall
+        Route::post('/servers/{uuid}/settings/reinstall', [ClientServerController::class, 'reinstall']);
 
         // Backups
         Route::get('/servers/{uuid}/backups', [BackupController::class, 'index']);

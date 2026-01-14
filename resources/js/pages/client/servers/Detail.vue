@@ -6,6 +6,7 @@ import { clientServerApi } from '@/api';
 import VncConsole from '@/components/VncConsole.vue';
 import ServerSettingsModal from '@/components/ServerSettingsModal.vue';
 import SnapshotsPanel from '@/components/SnapshotsPanel.vue';
+import IsoModal from '@/components/IsoModal.vue';
 import {
     ArrowLeftIcon,
     ServerIcon,
@@ -21,6 +22,7 @@ const queryClient = useQueryClient();
 const uuid = computed(() => route.params.uuid as string);
 const showConsole = ref(false);
 const showSettings = ref(false);
+const showIso = ref(false);
 
 // Fetch server details
 const { data: server, isLoading } = useQuery({
@@ -116,6 +118,12 @@ const diskTotal = computed(() => server.value?.disk || 0);
                     >
                         <Cog6ToothIcon class="w-4 h-4 inline mr-1" />
                         Settings
+                    </button>
+                    <button
+                        @click="showIso = true"
+                        class="btn-secondary px-4 py-2"
+                    >
+                        ISO
                     </button>
                     <button
                         @click="showConsole = true"
@@ -323,6 +331,13 @@ const diskTotal = computed(() => server.value?.disk || 0);
             :server-uuid="uuid"
             :show="showSettings"
             @close="showSettings = false"
+        />
+        
+        <!-- ISO Modal -->
+        <IsoModal
+            :server-uuid="uuid"
+            :show="showIso"
+            @close="showIso = false"
         />
     </div>
 </template>

@@ -115,4 +115,13 @@ export const clientServerApi = {
         const response = await api.delete(`/client/servers/${uuid}/snapshots/${name}`);
         return response.data;
     },
+
+    // Reinstall
+    reinstall: async (uuid: string, templateId: number, password: string): Promise<{ message: string }> => {
+        const response = await api.post(`/client/servers/${uuid}/settings/reinstall`, {
+            template_id: templateId,
+            password
+        });
+        return response.data;
+    },
 };

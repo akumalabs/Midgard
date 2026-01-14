@@ -254,6 +254,39 @@ class ServerController extends Controller
     }
 
     /**
+     * Reinstall server from template.
+     * Uses Convoy-style job chain for safe reinstallation.
+     */
+    public function reinstall(Request $request, string $uuid): JsonResponse
+    {
+        $server = $request->user()
+            ->servers()
+            ->where('uuid', $uuid)
+            ->with('node')
+            ->firstOrFail();
+
+        if ($server->is_suspended) {
+            return response()->json([
+                'message' => 'Cannot reinstall a suspended server',
+            ], 403);
+        }
+
+        $request->validate([
+            'template_id' => ['required', 'exists:templates,id'],
+            'password' => ['required', 'string', 'min:8', 'max:72'],
+        ]);
+
+        $template = \App\Models\Template::findOrFail($request->template_id);
+
+        // Dispatch reinstall job chain
+        \App\Jobs\Server\ReinstallServerJob::dispatch($server, $template, $request->password);
+
+        return response()->json([
+            'message' => 'Server reinstall started',
+        ]);
+    }
+
+    /**
      * Mount ISO to server.
      */
     public function mountIso(Request $request, string $uuid): JsonResponse
