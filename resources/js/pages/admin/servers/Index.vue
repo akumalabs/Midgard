@@ -53,9 +53,9 @@ const formData = ref({
     vmid: '' as string | number, // Custom VM ID
     template_vmid: '',
     cpu: 1,
-    memory: 1024,
-    disk: 10240,
-    bandwidth_limit: 0,
+    memory: 1,      // GB
+    disk: 10,       // GB
+    bandwidth_limit: 0,  // TB (0 = unlimited)
     ip_address: '',
     address_pool_id: '' as string | number,
 });
@@ -86,9 +86,9 @@ const openCreate = () => {
         vmid: '',
         template_vmid: '',
         cpu: 1,
-        memory: 1024,
-        disk: 10240,
-        bandwidth_limit: 0,
+        memory: 1,      // GB
+        disk: 10,       // GB
+        bandwidth_limit: 0,  // TB (0 = unlimited)
         ip_address: '',
         address_pool_id: '',
     };
@@ -121,9 +121,9 @@ const createMutation = useMutation({
             node_id: formData.value.node_id,
             template_vmid: formData.value.template_vmid,
             cpu: formData.value.cpu,
-            memory: formData.value.memory * 1024 * 1024, // MB to bytes
-            disk: formData.value.disk * 1024 * 1024,     // MB to bytes
-            bandwidth_limit: formData.value.bandwidth_limit ? formData.value.bandwidth_limit * 1024 * 1024 * 1024 : null, // GB to bytes
+            memory: formData.value.memory * 1024 * 1024 * 1024, // GB to bytes
+            disk: formData.value.disk * 1024 * 1024 * 1024,     // GB to bytes
+            bandwidth_limit: formData.value.bandwidth_limit ? formData.value.bandwidth_limit * 1024 * 1024 * 1024 * 1024 : null, // TB to bytes
         };
         // Optional: password
         if (formData.value.password) {
@@ -385,16 +385,16 @@ const statusColor = (status: string) => {
                                     <input v-model.number="formData.cpu" type="number" class="input" min="1" max="64" required />
                                 </div>
                                 <div>
-                                    <label class="label text-xs">Memory (MB)</label>
-                                    <input v-model.number="formData.memory" type="number" class="input" min="512" step="256" required />
+                                    <label class="label text-xs">Memory (GB)</label>
+                                    <input v-model.number="formData.memory" type="number" class="input" min="1" step="1" required />
                                 </div>
                                 <div>
-                                    <label class="label text-xs">Disk (MB)</label>
-                                    <input v-model.number="formData.disk" type="number" class="input" min="1024" step="1024" required />
+                                    <label class="label text-xs">Disk (GB)</label>
+                                    <input v-model.number="formData.disk" type="number" class="input" min="1" step="1" required />
                                 </div>
                                 <div>
-                                    <label class="label text-xs">Bandwidth (GB)</label>
-                                    <input v-model.number="formData.bandwidth_limit" type="number" class="input" min="0" placeholder="0 = unlimited" />
+                                    <label class="label text-xs">Bandwidth (TB)</label>
+                                    <input v-model.number="formData.bandwidth_limit" type="number" class="input" min="0" step="0.1" placeholder="0 = unlimited" />
                                 </div>
                             </div>
                         </div>
