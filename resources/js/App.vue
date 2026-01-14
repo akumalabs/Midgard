@@ -3,6 +3,9 @@ import { useAuthStore } from '@/stores/auth';
 import { ref, onMounted } from 'vue';
 
 const authStore = useAuthStore();
+import { useThemeStore } from '@/stores/theme';
+const themeStore = useThemeStore();
+
 const isReady = ref(false);
 
 onMounted(async () => {

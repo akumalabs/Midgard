@@ -71,14 +71,42 @@
     }
 }
 
+/* Semantic Colors - Theming support */
+:root {
+    /* Default Light Mode */
+    --bg-base: var(--color-secondary-50);
+    --bg-surface: var(--color-white);
+    --bg-surface-secondary: var(--color-secondary-100);
+    --text-base: var(--color-secondary-900);
+    --text-muted: var(--color-secondary-500);
+    --border-base: var(--color-secondary-200);
+
+    /* Interactive */
+    --primary-base: var(--color-primary-600);
+    --primary-fg: var(--color-white);
+}
+
+:root.dark {
+    /* Dark Mode overrides */
+    --bg-base: var(--color-secondary-950);
+    --bg-surface: var(--color-secondary-900);
+    --bg-surface-secondary: var(--color-secondary-800);
+    --text-base: var(--color-secondary-50);
+    --text-muted: var(--color-secondary-400);
+    --border-base: var(--color-secondary-800);
+}
+
 @layer base {
     html {
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
+        @apply transition-colors duration-200;
     }
 
     body {
-        @apply bg-secondary-950 text-secondary-100 font-sans;
+        background-color: var(--bg-base);
+        color: var(--text-base);
+        @apply font-sans;
     }
 
     ::-webkit-scrollbar {
@@ -86,15 +114,16 @@
     }
 
     ::-webkit-scrollbar-track {
-        @apply bg-secondary-900;
+        background-color: var(--bg-base);
     }
 
     ::-webkit-scrollbar-thumb {
-        @apply bg-secondary-700 rounded-full;
+        background-color: var(--border-base);
+        border-radius: 9999px;
     }
 
     ::-webkit-scrollbar-thumb:hover {
-        @apply bg-secondary-600;
+        background-color: var(--text-muted);
     }
 }
 
@@ -130,23 +159,34 @@
         @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-secondary-950 disabled:opacity-50 disabled:cursor-not-allowed bg-transparent text-secondary-300 hover:bg-secondary-800 hover:text-white;
     }
 
+    /* Inputs */
+    .input {
+        @apply w-full px-4 py-2.5 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-transparent transition-all duration-200;
+        background-color: var(--bg-surface);
+        border-color: var(--border-base);
+        color: var(--text-base);
+    }
+
+    .input:focus {
+        border-color: var(--primary-base);
+    }
+
     /* Cards */
     .card {
-        @apply bg-secondary-900/50 border border-secondary-800 rounded-xl;
-        backdrop-filter: blur(12px);
+        @apply rounded-xl border backdrop-blur-md;
+        background-color: var(--bg-surface);
+        /* fallback */
+        background-color: color-mix(in srgb, var(--bg-surface), transparent 20%);
+        border-color: var(--border-base);
     }
 
     .card-header {
-        @apply px-6 py-4 border-b border-secondary-800;
+        @apply px-6 py-4 border-b;
+        border-color: var(--border-base);
     }
 
     .card-body {
         @apply px-6 py-4;
-    }
-
-    /* Inputs */
-    .input {
-        @apply w-full px-4 py-2.5 bg-secondary-900 border border-secondary-700 rounded-lg text-secondary-100 placeholder-secondary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200;
     }
 
     .input-error {
@@ -182,30 +222,21 @@
         @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-secondary-700 text-secondary-300;
     }
 
-    /* Status dots */
-    .status-dot-running {
-        @apply w-2 h-2 rounded-full bg-success-500 animate-pulse;
-    }
-
-    .status-dot-stopped {
-        @apply w-2 h-2 rounded-full bg-danger-500;
-    }
-
-    .status-dot-pending {
-        @apply w-2 h-2 rounded-full bg-warning-500 animate-pulse;
-    }
-
     /* Tables */
     .table {
         @apply w-full text-left;
     }
 
     .table th {
-        @apply px-4 py-3 text-xs font-medium text-secondary-400 uppercase tracking-wider bg-secondary-900/50;
+        @apply px-4 py-3 text-xs font-medium uppercase tracking-wider;
+        background-color: var(--bg-surface-secondary);
+        color: var(--text-muted);
     }
 
     .table td {
-        @apply px-4 py-4 text-sm text-secondary-200 border-t border-secondary-800;
+        @apply px-4 py-4 text-sm border-t;
+        color: var(--text-base);
+        border-color: var(--border-base);
     }
 
     .table tbody tr {
@@ -213,20 +244,25 @@
     }
 
     .table tbody tr:hover {
-        @apply bg-secondary-800/50;
+        background-color: var(--bg-surface-secondary);
     }
 
     /* Navigation */
     .nav-link {
-        @apply flex items-center gap-3 px-4 py-2.5 text-secondary-400 rounded-lg transition-all duration-200;
+        @apply flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200;
+        color: var(--text-muted);
     }
 
     .nav-link:hover {
-        @apply text-white bg-secondary-800/50;
+        background-color: var(--bg-surface-secondary);
+        color: var(--text-base);
     }
 
     .nav-link-active {
-        @apply text-white bg-primary-600/20 border-l-2 border-primary-500;
+        background-color: color-mix(in srgb, var(--primary-base), transparent 85%);
+        color: var(--primary-base);
+        border-left-width: 2px;
+        border-color: var(--primary-base);
     }
 }
 
@@ -234,6 +270,10 @@
     .glass {
         @apply bg-secondary-900/30 border border-secondary-800/50;
         backdrop-filter: blur(20px);
+    }
+
+    .text-muted {
+        color: var(--text-muted);
     }
 
     .gradient-text {
