@@ -5,7 +5,6 @@ import { useAuthStore } from '@/stores/auth';
 import {
     HomeIcon,
     ServerStackIcon,
-    KeyIcon,
     UserCircleIcon,
     ArrowRightOnRectangleIcon,
     Bars3Icon,

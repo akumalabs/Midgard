@@ -128,6 +128,14 @@ class ServerController extends Controller
                 'message' => 'Failed to create server',
                 'error' => $e->getMessage(),
             ], 422);
+        } catch (\Exception $e) {
+            // Catch any other exceptions for debugging
+            return response()->json([
+                'message' => 'Server Error',
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ], 500);
         }
     }
 

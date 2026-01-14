@@ -1,14 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { computed } from 'vue';
 import { useQuery } from '@tanstack/vue-query';
 import { useAuthStore } from '@/stores/auth';
 import { adminServerApi, nodeApi, userApi } from '@/api';
-import type { Server, Node, User } from '@/types/models';
 import {
     ServerStackIcon,
     CpuChipIcon,
     UsersIcon,
-    MapPinIcon,
 } from '@heroicons/vue/24/outline';
 
 const authStore = useAuthStore();
