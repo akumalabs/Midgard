@@ -47,6 +47,7 @@ const loadingTemplates = ref(false);
 const formData = ref({
     name: '',
     hostname: '',
+    password: '',
     user_id: '' as string | number,
     node_id: '' as string | number,
     vmid: '' as string | number, // Custom VM ID
@@ -79,6 +80,7 @@ const openCreate = () => {
     formData.value = {
         name: '',
         hostname: '',
+        password: '',
         user_id: '',
         node_id: '',
         vmid: '',
@@ -109,6 +111,10 @@ const createMutation = useMutation({
             disk: formData.value.disk * 1024 * 1024,     // MB to bytes
             bandwidth_limit: formData.value.bandwidth_limit ? formData.value.bandwidth_limit * 1024 * 1024 * 1024 : null, // GB to bytes
         };
+        // Optional: password
+        if (formData.value.password) {
+            data.password = formData.value.password;
+        }
         // Optional: custom VMID (if blank, Proxmox auto-assigns)
         if (formData.value.vmid) {
             data.vmid = Number(formData.value.vmid);
@@ -306,9 +312,15 @@ const statusColor = (status: string) => {
                                     <p class="text-xs text-secondary-500 mt-1">Leave blank for auto</p>
                                 </div>
                             </div>
-                            <div>
-                                <label class="label">Hostname</label>
-                                <input v-model="formData.hostname" type="text" class="input" placeholder="server1.example.com (defaults to server name)" />
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="label">Hostname</label>
+                                    <input v-model="formData.hostname" type="text" class="input" placeholder="server1.example.com" />
+                                </div>
+                                <div>
+                                    <label class="label">Root Password</label>
+                                    <input v-model="formData.password" type="password" class="input" placeholder="Min 8 characters" minlength="8" />
+                                </div>
                             </div>
                         </div>
 

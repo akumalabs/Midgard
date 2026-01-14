@@ -5,8 +5,6 @@ import { addressPoolApi, nodeApi, adminServerApi } from '@/api';
 import type { AddressPool, Address } from '@/api/addressPools';
 import {
     PlusIcon,
-    TrashIcon,
-    PencilIcon,
     GlobeAltIcon,
     MagnifyingGlassIcon,
     EllipsisVerticalIcon,
@@ -322,12 +320,12 @@ const toggleNode = (nodeId: number) => {
                                     </button>
                                     <div 
                                         v-if="openMenuId === pool.id" 
-                                        class="absolute right-0 top-full mt-1 bg-secondary-800 border border-secondary-700 rounded-lg shadow-lg z-10 py-1 min-w-32"
+                                        class="absolute right-0 bottom-full mb-1 bg-secondary-800 border border-secondary-700 rounded-lg shadow-lg z-50 py-1 min-w-32"
                                     >
-                                        <button @click="openEditPool(pool)" class="w-full text-left px-4 py-2 hover:bg-secondary-700 text-white">
+                                        <button @click="openEditPool(pool)" class="w-full text-left px-4 py-2 hover:bg-secondary-700 text-white text-sm">
                                             Edit
                                         </button>
-                                        <button @click="confirmDeletePool(pool)" class="w-full text-left px-4 py-2 hover:bg-secondary-700 text-danger-500">
+                                        <button @click="confirmDeletePool(pool)" class="w-full text-left px-4 py-2 hover:bg-secondary-700 text-danger-500 text-sm">
                                             Delete
                                         </button>
                                     </div>
@@ -415,12 +413,12 @@ const toggleNode = (nodeId: number) => {
                                     </button>
                                     <div 
                                         v-if="addressMenuId === addr.id" 
-                                        class="absolute right-0 top-full mt-1 bg-secondary-800 border border-secondary-700 rounded-lg shadow-lg z-10 py-1 min-w-32"
+                                        class="absolute right-0 bottom-full mb-1 bg-secondary-800 border border-secondary-700 rounded-lg shadow-lg z-50 py-1 min-w-32"
                                     >
-                                        <button @click="openEditAddress(addr)" class="w-full text-left px-4 py-2 hover:bg-secondary-700 text-white">
+                                        <button @click="openEditAddress(addr)" class="w-full text-left px-4 py-2 hover:bg-secondary-700 text-white text-sm">
                                             Edit
                                         </button>
-                                        <button @click="confirmDeleteAddress(addr)" class="w-full text-left px-4 py-2 hover:bg-secondary-700 text-danger-500">
+                                        <button @click="confirmDeleteAddress(addr)" class="w-full text-left px-4 py-2 hover:bg-secondary-700 text-danger-500 text-sm">
                                             Delete
                                         </button>
                                     </div>
@@ -472,9 +470,9 @@ const toggleNode = (nodeId: number) => {
                         </div>
 
                         <div class="flex gap-3 pt-4">
-                            <button type="button" @click="showPoolModal = false" class="btn-secondary flex-1">CANCEL</button>
-                            <button type="submit" :disabled="poolMutation.isPending.value" class="btn-primary flex-1">
-                                {{ editingPool ? 'SAVE' : 'CREATE' }}
+                            <button type="button" @click="showPoolModal = false" class="btn-secondary flex-1 text-sm py-2.5">Cancel</button>
+                            <button type="submit" :disabled="poolMutation.isPending.value" class="btn-primary flex-1 text-sm py-2.5">
+                                {{ editingPool ? 'Save' : 'Create' }}
                             </button>
                         </div>
                     </form>
@@ -569,9 +567,9 @@ const toggleNode = (nodeId: number) => {
                         </div>
 
                         <div class="flex gap-3 pt-4">
-                            <button type="button" @click="showAddressModal = false" class="btn-secondary flex-1">CANCEL</button>
-                            <button type="submit" :disabled="addressMutation.isPending.value" class="btn-primary flex-1">
-                                {{ editingAddress ? 'SAVE' : 'CREATE' }}
+                            <button type="button" @click="showAddressModal = false" class="btn-secondary flex-1 text-sm py-2.5">Cancel</button>
+                            <button type="submit" :disabled="addressMutation.isPending.value" class="btn-primary flex-1 text-sm py-2.5">
+                                {{ editingAddress ? 'Save' : 'Create' }}
                             </button>
                         </div>
                     </form>

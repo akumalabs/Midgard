@@ -18,6 +18,7 @@ class Server extends Model
         'vmid',
         'name',
         'hostname',
+        'password',
         'description',
         'cpu',
         'memory',
