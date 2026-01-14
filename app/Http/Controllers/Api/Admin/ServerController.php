@@ -80,6 +80,34 @@ class ServerController extends Controller
 
         $node = Node::findOrFail($validated['node_id']);
 
+        // Find the template and validate minimum specs
+        $template = \App\Models\Template::where('vmid', $validated['template_vmid'])->first();
+        
+        if ($template) {
+            $errors = [];
+            
+            if ($template->min_cpu && $validated['cpu'] < $template->min_cpu) {
+                $errors['cpu'] = ["CPU cores must be at least {$template->min_cpu} for this template."];
+            }
+            
+            if ($template->min_memory && $validated['memory'] < $template->min_memory) {
+                $minMemoryMB = round($template->min_memory / 1024 / 1024);
+                $errors['memory'] = ["Memory must be at least {$minMemoryMB} MB for this template."];
+            }
+            
+            if ($template->min_disk && $validated['disk'] < $template->min_disk) {
+                $minDiskGB = round($template->min_disk / 1024 / 1024 / 1024);
+                $errors['disk'] = ["Disk must be at least {$minDiskGB} GB for this template."];
+            }
+            
+            if (!empty($errors)) {
+                return response()->json([
+                    'message' => 'Server specifications do not meet template requirements',
+                    'errors' => $errors,
+                ], 422);
+            }
+        }
+
         try {
             $client = new ProxmoxApiClient($node);
 

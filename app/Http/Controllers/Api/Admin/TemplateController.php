@@ -109,6 +109,9 @@ class TemplateController extends Controller
             'template_group_id' => ['required', 'exists:template_groups,id'],
             'name' => ['required', 'string', 'max:255'],
             'vmid' => ['required', 'string'],
+            'min_cpu' => ['sometimes', 'integer', 'min:1'],
+            'min_memory' => ['sometimes', 'integer', 'min:0'],
+            'min_disk' => ['sometimes', 'integer', 'min:0'],
             'order' => ['sometimes', 'integer', 'min:0'],
             'visible' => ['sometimes', 'boolean'],
         ]);
@@ -130,6 +133,9 @@ class TemplateController extends Controller
             'template_group_id' => ['sometimes', 'exists:template_groups,id'],
             'name' => ['sometimes', 'string', 'max:255'],
             'vmid' => ['sometimes', 'string'],
+            'min_cpu' => ['sometimes', 'integer', 'min:1'],
+            'min_memory' => ['sometimes', 'integer', 'min:0'],
+            'min_disk' => ['sometimes', 'integer', 'min:0'],
             'order' => ['sometimes', 'integer', 'min:0'],
             'visible' => ['sometimes', 'boolean'],
         ]);
@@ -223,6 +229,9 @@ class TemplateController extends Controller
             'uuid' => $template->uuid,
             'name' => $template->name,
             'vmid' => $template->vmid,
+            'min_cpu' => $template->min_cpu ?? 1,
+            'min_memory' => $template->min_memory ?? 536870912,
+            'min_disk' => $template->min_disk ?? 1073741824,
             'order' => $template->order,
             'visible' => $template->visible,
         ];

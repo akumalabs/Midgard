@@ -15,6 +15,9 @@ class Template extends Model
         'template_group_id',
         'name',
         'vmid',
+        'min_cpu',
+        'min_memory',
+        'min_disk',
         'visible',
         'order',
     ];
@@ -22,6 +25,9 @@ class Template extends Model
     protected function casts(): array
     {
         return [
+            'min_cpu' => 'integer',
+            'min_memory' => 'integer',
+            'min_disk' => 'integer',
             'visible' => 'boolean',
             'order' => 'integer',
         ];
