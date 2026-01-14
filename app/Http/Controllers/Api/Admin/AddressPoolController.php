@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Data\Ipam\AddressPoolData;
+use App\Data\Ipam\IpAddressData;
 use App\Http\Controllers\Controller;
 use App\Models\Address;
 use App\Models\AddressPool;
 use App\Models\Node;
+use App\Services\Ipam\AddressService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -13,13 +16,14 @@ class AddressPoolController extends Controller
 {
     /**
      * List all address pools.
+     * Returns AddressPoolData DTOs following Convoy pattern.
      */
     public function index(): JsonResponse
     {
         $pools = AddressPool::withCount(['addresses', 'nodes'])
             ->with('nodes:id,name')
             ->get()
-            ->map(fn($pool) => $this->formatPool($pool));
+            ->map(fn($pool) => AddressPoolData::fromModel($pool));
 
         return response()->json([
             'data' => $pools,
@@ -28,13 +32,19 @@ class AddressPoolController extends Controller
 
     /**
      * Get a single pool with addresses.
+     * Returns detailed pool data with IpAddressData DTOs.
      */
     public function show(AddressPool $address_pool): JsonResponse
     {
         $address_pool->load(['nodes:id,name', 'addresses.server:id,uuid,name']);
 
         return response()->json([
-            'data' => $this->formatPool($address_pool, true),
+            'data' => [
+                ...AddressPoolData::fromModel($address_pool)->toArray(),
+                'addresses' => $address_pool->addresses->map(
+                    fn($addr) => IpAddressData::fromModel($addr)
+                ),
+            ],
         ]);
     }
 
@@ -211,21 +221,11 @@ class AddressPoolController extends Controller
 
     /**
      * Get available addresses for a node.
+     * Uses AddressService for consistency with Convoy pattern.
      */
-    public function available(Node $node): JsonResponse
+    public function available(Node $node, AddressService $addressService): JsonResponse
     {
-        $pools = $node->addressPools()->with(['addresses' => function ($q) {
-            $q->whereNull('server_id');
-        }])->get();
-
-        $addresses = $pools->flatMap(fn($pool) => $pool->addresses->map(fn($addr) => [
-            'id' => $addr->id,
-            'address' => $addr->address,
-            'cidr' => $addr->cidr,
-            'gateway' => $addr->gateway,
-            'type' => $addr->type,
-            'pool' => $pool->name,
-        ]));
+        $addresses = $addressService->getAvailable($node);
 
         return response()->json([
             'data' => $addresses,
