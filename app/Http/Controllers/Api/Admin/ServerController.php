@@ -61,24 +61,25 @@ class ServerController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'user_id' => ['required', 'exists:users,id'],
-            'node_id' => ['required', 'exists:nodes,id'],
-            'name' => ['required', 'string', 'max:255'],
-            'hostname' => ['nullable', 'string', 'max:255'],
-            'password' => ['nullable', 'string', 'min:8', 'max:255'],
-            'description' => ['nullable', 'string'],
-            'cpu' => ['required', 'integer', 'min:1', 'max:128'],
-            'memory' => ['required', 'integer', 'min:536870912'], // 512MB minimum
-            'disk' => ['required', 'integer', 'min:1073741824'], // 1GB minimum
-            'bandwidth_limit' => ['nullable', 'integer', 'min:0'],
-            'template_vmid' => ['required', 'string'], // Template to clone from
-            'vmid' => ['nullable', 'integer', 'min:100'], // Optional custom VMID
-            'address_pool_id' => ['nullable', 'exists:address_pools,id'],
-            'ip_address' => ['nullable', 'ip'],
-        ]);
+        try {
+            $validated = $request->validate([
+                'user_id' => ['required', 'exists:users,id'],
+                'node_id' => ['required', 'exists:nodes,id'],
+                'name' => ['required', 'string', 'max:255'],
+                'hostname' => ['nullable', 'string', 'max:255'],
+                'password' => ['nullable', 'string', 'min:8', 'max:255'],
+                'description' => ['nullable', 'string'],
+                'cpu' => ['required', 'integer', 'min:1', 'max:128'],
+                'memory' => ['required', 'integer', 'min:536870912'], // 512MB minimum
+                'disk' => ['required', 'integer', 'min:1073741824'], // 1GB minimum
+                'bandwidth_limit' => ['nullable', 'integer', 'min:0'],
+                'template_vmid' => ['required', 'string'], // Template to clone from
+                'vmid' => ['nullable', 'integer', 'min:100'], // Optional custom VMID
+                'address_pool_id' => ['nullable', 'exists:address_pools,id'],
+                'ip_address' => ['nullable', 'ip'],
+            ]);
 
-        $node = Node::findOrFail($validated['node_id']);
+            $node = Node::findOrFail($validated['node_id']);
 
         // Find the template and validate minimum specs
         $template = \App\Models\Template::where('vmid', $validated['template_vmid'])->first();
@@ -108,7 +109,6 @@ class ServerController extends Controller
             }
         }
 
-        try {
             $client = new ProxmoxApiClient($node);
 
             // Get next VMID or use custom one
