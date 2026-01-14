@@ -86,13 +86,14 @@ class ServerController extends Controller
             // Get next VMID or use custom one
             $vmid = $validated['vmid'] ?? $client->getNextVmid();
 
-            // Clone from template
+            // Clone from template (don't pass name - Proxmox validates as DNS)
+            // VM name can be set later via config update after clone completes
             $task = $client->cloneVM(
                 (int) $validated['template_vmid'],
                 $vmid,
                 [
-                    'name' => $validated['name'],
-                    'description' => $validated['description'] ?? '',
+                    'storage' => $node->vm_storage ?? 'local-lvm',
+                    'full' => 1,
                 ]
             );
 
