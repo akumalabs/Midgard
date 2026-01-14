@@ -177,14 +177,58 @@ class TemplateController extends Controller
 
             $synced = [];
             foreach ($proxmoxTemplates as $pTemplate) {
+                // Fetch VM config to get actual specs
+                $vmid = (int) $pTemplate['vmid'];
+                $config = [];
+                $minCpu = 1;
+                $minMemory = 536870912; // 512MB default
+                $minDisk = 1073741824; // 1GB default
+                
+                try {
+                    $config = $client->getVMConfig($vmid);
+                    
+                    // Extract CPU cores
+                    $minCpu = $config['cores'] ?? $config['sockets'] ?? 1;
+                    
+                    // Extract memory (Proxmox returns in MB)
+                    if (isset($config['memory'])) {
+                        $minMemory = (int) $config['memory'] * 1024 * 1024; // Convert MB to bytes
+                    }
+                    
+                    // Extract disk size - look for scsi0, virtio0, ide0, etc.
+                    foreach (['scsi0', 'virtio0', 'ide0', 'sata0'] as $diskKey) {
+                        if (isset($config[$diskKey]) && preg_match('/size=(\d+)([GMT])/', $config[$diskKey], $matches)) {
+                            $size = (int) $matches[1];
+                            $unit = $matches[2];
+                            $minDisk = match($unit) {
+                                'T' => $size * 1024 * 1024 * 1024 * 1024,
+                                'G' => $size * 1024 * 1024 * 1024,
+                                'M' => $size * 1024 * 1024,
+                                default => $size,
+                            };
+                            break;
+                        }
+                    }
+                } catch (\Exception $e) {
+                    // If we can't get config, use defaults
+                }
+                
                 $template = Template::updateOrCreate(
-                    ['template_group_id' => $group->id, 'vmid' => (string) $pTemplate['vmid']],
+                    ['template_group_id' => $group->id, 'vmid' => (string) $vmid],
                     [
-                        'name' => $pTemplate['name'] ?? "Template {$pTemplate['vmid']}",
+                        'name' => $pTemplate['name'] ?? "Template {$vmid}",
+                        'min_cpu' => $minCpu,
+                        'min_memory' => $minMemory,
+                        'min_disk' => $minDisk,
                         'visible' => true,
                     ]
                 );
-                $synced[] = $template->name;
+                $synced[] = [
+                    'name' => $template->name,
+                    'min_cpu' => $minCpu,
+                    'min_memory' => round($minMemory / 1024 / 1024) . ' MB',
+                    'min_disk' => round($minDisk / 1024 / 1024 / 1024) . ' GB',
+                ];
             }
 
             return response()->json([
