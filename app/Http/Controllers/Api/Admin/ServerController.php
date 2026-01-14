@@ -92,7 +92,7 @@ class ServerController extends Controller
                 (int) $validated['template_vmid'],
                 $vmid,
                 [
-                    'storage' => $node->vm_storage ?? 'local-lvm',
+                    'storage' => $node->storage ?? 'local-lvm',
                     'full' => 1,
                 ]
             );
