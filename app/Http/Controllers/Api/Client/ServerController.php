@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers\Api\Client;
 
+use App\Data\Server\ServerStateData;
+use App\Enums\Server\PowerCommand;
 use App\Http\Controllers\Controller;
 use App\Models\Server;
+use App\Repositories\Proxmox\Server\ProxmoxPowerRepository;
+use App\Repositories\Proxmox\Server\ProxmoxServerRepository;
 use App\Services\Proxmox\ProxmoxApiClient;
 use App\Services\Proxmox\ProxmoxApiException;
 use Illuminate\Http\JsonResponse;
@@ -46,6 +50,7 @@ class ServerController extends Controller
 
     /**
      * Get server status from Proxmox.
+     * Uses Convoy-style ServerStateData DTO
      */
     public function status(Request $request, string $uuid): JsonResponse
     {
@@ -57,23 +62,28 @@ class ServerController extends Controller
 
         try {
             $client = new ProxmoxApiClient($server->node);
-            $status = $client->getVMStatus((int) $server->vmid);
+            $repository = (new ProxmoxServerRepository($client))->setServer($server);
+            $state = $repository->getState();
 
             return response()->json([
                 'data' => [
-                    'status' => $status['status'] ?? 'unknown',
-                    'uptime' => $status['uptime'] ?? 0,
-                    'cpu' => round(($status['cpu'] ?? 0) * 100, 2),
+                    'status' => $state->state->value,
+                    'uptime' => $state->uptime,
+                    'uptime_formatted' => $state->uptimeFormatted(),
+                    'cpu' => $state->cpuPercent(),
                     'memory' => [
-                        'used' => $status['mem'] ?? 0,
-                        'total' => $status['maxmem'] ?? 0,
-                        'percentage' => ($status['maxmem'] ?? 0) > 0
-                            ? round(($status['mem'] / $status['maxmem']) * 100, 2)
-                            : 0,
+                        'used' => $state->memoryUsed,
+                        'total' => $state->memoryTotal,
+                        'percentage' => $state->memoryPercent(),
+                    ],
+                    'disk' => [
+                        'used' => $state->diskUsed,
+                        'total' => $state->diskTotal,
+                        'percentage' => $state->diskPercent(),
                     ],
                     'network' => [
-                        'in' => $status['netin'] ?? 0,
-                        'out' => $status['netout'] ?? 0,
+                        'in' => $state->netIn,
+                        'out' => $state->netOut,
                     ],
                 ],
             ]);
@@ -88,6 +98,7 @@ class ServerController extends Controller
 
     /**
      * Power action on a server.
+     * Uses Convoy-style PowerCommand enum and ProxmoxPowerRepository
      */
     public function power(Request $request, string $uuid): JsonResponse
     {
@@ -110,18 +121,20 @@ class ServerController extends Controller
 
         try {
             $client = new ProxmoxApiClient($server->node);
+            $repository = (new ProxmoxPowerRepository($client))->setServer($server);
             $action = $request->action;
             
             logger()->info("Power action {$action} on server {$server->vmid}");
 
+            // Map to PowerCommand enum and send via repository
             $result = match ($action) {
-                'start' => $client->startVM((int) $server->vmid),
-                'stop', 'kill' => $client->stopVM((int) $server->vmid),
-                'shutdown' => $client->shutdownVM((int) $server->vmid),
-                'restart' => $client->rebootVM((int) $server->vmid),
+                'start' => $repository->start(),
+                'stop', 'kill' => $repository->kill(),
+                'shutdown' => $repository->shutdown(),
+                'restart' => $repository->reboot(),
             };
             
-            logger()->info("Power action result", ['result' => $result]);
+            logger()->info("Power action result", ['upid' => $result]);
 
             // Update status
             $newStatus = match ($action) {
@@ -132,7 +145,7 @@ class ServerController extends Controller
 
             return response()->json([
                 'message' => "Server {$action} initiated",
-                'data' => ['status' => $newStatus],
+                'data' => ['status' => $newStatus, 'upid' => $result],
             ]);
 
         } catch (ProxmoxApiException $e) {
