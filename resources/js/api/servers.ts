@@ -90,4 +90,29 @@ export const clientServerApi = {
         const response = await api.post(`/client/servers/${uuid}/settings/iso/unmount`);
         return response.data;
     },
+
+    // Snapshots API
+    listSnapshots: async (uuid: string): Promise<any[]> => {
+        const response = await api.get(`/client/servers/${uuid}/snapshots`);
+        return response.data.data;
+    },
+
+    createSnapshot: async (uuid: string, name: string, description?: string, includeRam?: boolean): Promise<{ message: string; upid: string }> => {
+        const response = await api.post(`/client/servers/${uuid}/snapshots`, {
+            name,
+            description,
+            include_ram: includeRam
+        });
+        return response.data;
+    },
+
+    rollbackSnapshot: async (uuid: string, name: string): Promise<{ message: string; upid: string }> => {
+        const response = await api.post(`/client/servers/${uuid}/snapshots/${name}/rollback`);
+        return response.data;
+    },
+
+    deleteSnapshot: async (uuid: string, name: string): Promise<{ message: string; upid: string }> => {
+        const response = await api.delete(`/client/servers/${uuid}/snapshots/${name}`);
+        return response.data;
+    },
 };

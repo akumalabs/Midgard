@@ -331,6 +331,160 @@ class ServerController extends Controller
     }
 
     /**
+     * List snapshots for a server.
+     */
+    public function listSnapshots(Request $request, string $uuid): JsonResponse
+    {
+        $server = $request->user()
+            ->servers()
+            ->where('uuid', $uuid)
+            ->with('node')
+            ->firstOrFail();
+
+        try {
+            $client = new ProxmoxApiClient($server->node);
+            $repository = (new \App\Repositories\Proxmox\Server\ProxmoxSnapshotRepository($client))
+                ->setServer($server);
+            
+            $snapshots = $repository->list();
+            
+            // Filter out 'current' state entry
+            $snapshots = array_filter($snapshots, fn($s) => ($s['name'] ?? '') !== 'current');
+
+            return response()->json([
+                'data' => array_values($snapshots),
+            ]);
+
+        } catch (ProxmoxApiException $e) {
+            return response()->json([
+                'message' => 'Failed to list snapshots',
+                'error' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * Create a snapshot.
+     */
+    public function createSnapshot(Request $request, string $uuid): JsonResponse
+    {
+        $server = $request->user()
+            ->servers()
+            ->where('uuid', $uuid)
+            ->with('node')
+            ->firstOrFail();
+
+        if ($server->is_suspended) {
+            return response()->json([
+                'message' => 'Cannot create snapshot of a suspended server',
+            ], 403);
+        }
+
+        $request->validate([
+            'name' => ['required', 'string', 'max:40', 'regex:/^[a-zA-Z0-9_-]+$/'],
+            'description' => ['nullable', 'string', 'max:255'],
+            'include_ram' => ['nullable', 'boolean'],
+        ]);
+
+        try {
+            $client = new ProxmoxApiClient($server->node);
+            $repository = (new \App\Repositories\Proxmox\Server\ProxmoxSnapshotRepository($client))
+                ->setServer($server);
+            
+            $upid = $repository->create(
+                $request->name,
+                $request->description,
+                $request->boolean('include_ram', false)
+            );
+
+            return response()->json([
+                'message' => 'Snapshot creation started',
+                'upid' => $upid,
+            ]);
+
+        } catch (ProxmoxApiException $e) {
+            return response()->json([
+                'message' => 'Failed to create snapshot',
+                'error' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * Rollback to a snapshot.
+     */
+    public function rollbackSnapshot(Request $request, string $uuid, string $name): JsonResponse
+    {
+        $server = $request->user()
+            ->servers()
+            ->where('uuid', $uuid)
+            ->with('node')
+            ->firstOrFail();
+
+        if ($server->is_suspended) {
+            return response()->json([
+                'message' => 'Cannot rollback a suspended server',
+            ], 403);
+        }
+
+        try {
+            $client = new ProxmoxApiClient($server->node);
+            $repository = (new \App\Repositories\Proxmox\Server\ProxmoxSnapshotRepository($client))
+                ->setServer($server);
+            
+            $upid = $repository->rollback($name);
+
+            return response()->json([
+                'message' => 'Snapshot rollback started',
+                'upid' => $upid,
+            ]);
+
+        } catch (ProxmoxApiException $e) {
+            return response()->json([
+                'message' => 'Failed to rollback snapshot',
+                'error' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * Delete a snapshot.
+     */
+    public function deleteSnapshot(Request $request, string $uuid, string $name): JsonResponse
+    {
+        $server = $request->user()
+            ->servers()
+            ->where('uuid', $uuid)
+            ->with('node')
+            ->firstOrFail();
+
+        if ($server->is_suspended) {
+            return response()->json([
+                'message' => 'Cannot delete snapshot of a suspended server',
+            ], 403);
+        }
+
+        try {
+            $client = new ProxmoxApiClient($server->node);
+            $repository = (new \App\Repositories\Proxmox\Server\ProxmoxSnapshotRepository($client))
+                ->setServer($server);
+            
+            $upid = $repository->delete($name);
+
+            return response()->json([
+                'message' => 'Snapshot deletion started',
+                'upid' => $upid,
+            ]);
+
+        } catch (ProxmoxApiException $e) {
+            return response()->json([
+                'message' => 'Failed to delete snapshot',
+                'error' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
      * Format server for API response.
      */
     protected function formatServer(Server $server, bool $detailed = false): array

@@ -91,6 +91,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/servers/{uuid}/settings/password', [ClientServerController::class, 'updatePassword']);
         Route::post('/servers/{uuid}/settings/iso/mount', [ClientServerController::class, 'mountIso']);
         Route::post('/servers/{uuid}/settings/iso/unmount', [ClientServerController::class, 'unmountIso']);
+        
+        // Snapshots
+        Route::get('/servers/{uuid}/snapshots', [ClientServerController::class, 'listSnapshots']);
+        Route::post('/servers/{uuid}/snapshots', [ClientServerController::class, 'createSnapshot']);
+        Route::post('/servers/{uuid}/snapshots/{name}/rollback', [ClientServerController::class, 'rollbackSnapshot']);
+        Route::delete('/servers/{uuid}/snapshots/{name}', [ClientServerController::class, 'deleteSnapshot']);
 
         // Backups
         Route::get('/servers/{uuid}/backups', [BackupController::class, 'index']);
