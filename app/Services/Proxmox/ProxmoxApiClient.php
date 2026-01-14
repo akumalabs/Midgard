@@ -235,11 +235,13 @@ class ProxmoxApiClient
 
     /**
      * Update VM configuration.
+     * Convoy uses POST for config updates, not PUT.
      */
     public function updateVMConfig(int $vmid, array $config, string $nodeName = null): array|string
     {
         $nodeName = $nodeName ?? $this->getProxmoxNodeName();
-        return $this->put("/nodes/{$nodeName}/qemu/{$vmid}/config", $config);
+        // Convoy uses POST for /config endpoint, not PUT
+        return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/config", $config);
     }
 
     /**

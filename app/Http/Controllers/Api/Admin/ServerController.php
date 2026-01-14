@@ -139,9 +139,10 @@ class ServerController extends Controller
             }
 
             // Apply VM configuration (CPU, memory)
+            // Convoy pattern: memory / 1048576 for bytes to MB
             $config = [
                 'cores' => $validated['cpu'],
-                'memory' => (int) ($validated['memory'] / 1024 / 1024), // bytes to MB for Proxmox
+                'memory' => (int) ($validated['memory'] / 1048576), // bytes to MB (Convoy pattern)
             ];
             
             // Try to apply config (VM must exist)
