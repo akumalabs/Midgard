@@ -100,14 +100,14 @@ const openCreate = () => {
 // Create mutation
 const createMutation = useMutation({
     mutationFn: async () => {
-        // Sanitize hostname: lowercase, replace spaces with hyphens, remove invalid chars
+        // Sanitize hostname: lowercase, replace spaces with dots, remove invalid chars
         const sanitizeHostname = (name: string): string => {
             return name
                 .toLowerCase()
-                .replace(/\s+/g, '-')           // Replace spaces with hyphens
-                .replace(/[^a-z0-9-]/g, '')     // Remove invalid characters
-                .replace(/-+/g, '-')            // Replace multiple hyphens with single
-                .replace(/^-|-$/g, '');         // Remove leading/trailing hyphens
+                .replace(/\s+/g, '.')           // Replace spaces with dot
+                .replace(/[^a-z0-9.-]/g, '')    // Remove invalid characters (allow dots and hyphens)
+                .replace(/\.+/g, '.')           // Replace multiple dots with single
+                .replace(/^[.-]|[.-]$/g, '');   // Remove leading/trailing dots/hyphens
         };
         
         const hostname = formData.value.hostname 
@@ -332,7 +332,7 @@ const statusColor = (status: string) => {
                                     <input v-model="formData.hostname" type="text" class="input" placeholder="server1.example.com" />
                                 </div>
                                 <div>
-                                    <label class="label">Root Password</label>
+                                    <label class="label">Server Password</label>
                                     <input v-model="formData.password" type="password" class="input" placeholder="Min 8 characters" minlength="8" />
                                 </div>
                             </div>
