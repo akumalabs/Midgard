@@ -71,8 +71,9 @@ class ProxmoxApiClient
 
     /**
      * Handle the API response.
+     * Proxmox may return array (like VM status) or string (like task UPID for clone)
      */
-    protected function handleResponse(Response $response): array
+    protected function handleResponse(Response $response): array|string
     {
         if (!$response->successful()) {
             throw new ProxmoxApiException(
@@ -81,7 +82,10 @@ class ProxmoxApiClient
             );
         }
 
-        return $response->json('data') ?? [];
+        $data = $response->json('data');
+        
+        // Return data as-is (could be array, string, or null)
+        return $data ?? [];
     }
 
     /**
