@@ -29,12 +29,12 @@ class AddressPoolController extends Controller
     /**
      * Get a single pool with addresses.
      */
-    public function show(AddressPool $pool): JsonResponse
+    public function show(AddressPool $address_pool): JsonResponse
     {
-        $pool->load(['nodes:id,name', 'addresses.server:id,uuid,name']);
+        $address_pool->load(['nodes:id,name', 'addresses.server:id,uuid,name']);
 
         return response()->json([
-            'data' => $this->formatPool($pool, true),
+            'data' => $this->formatPool($address_pool, true),
         ]);
     }
 
@@ -64,7 +64,7 @@ class AddressPoolController extends Controller
     /**
      * Update an address pool.
      */
-    public function update(Request $request, AddressPool $pool): JsonResponse
+    public function update(Request $request, AddressPool $address_pool): JsonResponse
     {
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
@@ -73,32 +73,32 @@ class AddressPoolController extends Controller
         ]);
 
         if (isset($validated['name'])) {
-            $pool->update(['name' => $validated['name']]);
+            $address_pool->update(['name' => $validated['name']]);
         }
 
         if (isset($validated['node_ids'])) {
-            $pool->nodes()->sync($validated['node_ids']);
+            $address_pool->nodes()->sync($validated['node_ids']);
         }
 
         return response()->json([
             'message' => 'Address pool updated',
-            'data' => $this->formatPool($pool->fresh()->load('nodes:id,name')),
+            'data' => $this->formatPool($address_pool->fresh()->load('nodes:id,name')),
         ]);
     }
 
     /**
      * Delete an address pool.
      */
-    public function destroy(AddressPool $pool): JsonResponse
+    public function destroy(AddressPool $address_pool): JsonResponse
     {
         // Check if any addresses are assigned
-        if ($pool->addresses()->whereNotNull('server_id')->count() > 0) {
+        if ($address_pool->addresses()->whereNotNull('server_id')->count() > 0) {
             return response()->json([
                 'message' => 'Cannot delete pool with assigned addresses',
             ], 422);
         }
 
-        $pool->delete();
+        $address_pool->delete();
 
         return response()->json([
             'message' => 'Address pool deleted',
