@@ -4,6 +4,8 @@ import { useRoute } from 'vue-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query';
 import { clientServerApi } from '@/api';
 import VncConsole from '@/components/VncConsole.vue';
+import ServerSettingsModal from '@/components/ServerSettingsModal.vue';
+import SnapshotsPanel from '@/components/SnapshotsPanel.vue';
 import {
     ArrowLeftIcon,
     ServerIcon,
@@ -11,12 +13,14 @@ import {
     CircleStackIcon,
     ClockIcon,
     SignalIcon,
+    Cog6ToothIcon,
 } from '@heroicons/vue/24/outline';
 
 const route = useRoute();
 const queryClient = useQueryClient();
 const uuid = computed(() => route.params.uuid as string);
 const showConsole = ref(false);
+const showSettings = ref(false);
 
 // Fetch server details
 const { data: server, isLoading } = useQuery({
@@ -106,6 +110,13 @@ const diskTotal = computed(() => server.value?.disk || 0);
                 
                 <!-- Power Buttons (Convoy style) -->
                 <div class="flex flex-wrap gap-2">
+                    <button
+                        @click="showSettings = true"
+                        class="btn-secondary px-4 py-2"
+                    >
+                        <Cog6ToothIcon class="w-4 h-4 inline mr-1" />
+                        Settings
+                    </button>
                     <button
                         @click="showConsole = true"
                         :disabled="!isRunning"
@@ -295,6 +306,8 @@ const diskTotal = computed(() => server.value?.disk || 0);
                     </div>
                 </div>
             </div>
+            <!-- Snapshots Panel -->
+            <SnapshotsPanel :server-uuid="uuid" />
         </template>
         
         <!-- VNC Console Modal -->
@@ -303,6 +316,13 @@ const diskTotal = computed(() => server.value?.disk || 0);
             :server-uuid="uuid" 
             :show="showConsole"
             @close="showConsole = false"
+        />
+        
+        <!-- Settings Modal -->
+        <ServerSettingsModal
+            :server-uuid="uuid"
+            :show="showSettings"
+            @close="showSettings = false"
         />
     </div>
 </template>
