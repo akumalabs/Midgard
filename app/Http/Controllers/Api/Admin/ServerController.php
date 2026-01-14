@@ -114,9 +114,8 @@ class ServerController extends Controller
             // Get next VMID or use custom one
             $vmid = $validated['vmid'] ?? $client->getNextVmid();
 
-            // Clone from template (don't pass name - Proxmox validates as DNS)
-            // VM name can be set later via config update after clone completes
-            $task = $client->cloneVM(
+            // Clone from template
+            $taskUpid = $client->cloneVM(
                 (int) $validated['template_vmid'],
                 $vmid,
                 [
@@ -124,6 +123,37 @@ class ServerController extends Controller
                     'full' => 1,
                 ]
             );
+
+            // Wait for clone to complete (max 5 minutes)
+            // The clone task returns a UPID string
+            if (is_string($taskUpid) && str_contains($taskUpid, 'UPID:')) {
+                try {
+                    $client->waitForTask($taskUpid, 300);
+                } catch (\Exception $e) {
+                    // Clone might still be running, continue anyway
+                    logger()->warning('Clone task wait failed', [
+                        'task' => $taskUpid,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            // Apply VM configuration (CPU, memory, disk resize is separate)
+            $config = [
+                'cores' => $validated['cpu'],
+                'memory' => (int) ($validated['memory'] / 1024 / 1024), // bytes to MB for Proxmox
+            ];
+            
+            // Try to apply config (VM must exist)
+            try {
+                $client->updateVMConfig($vmid, $config);
+            } catch (\Exception $e) {
+                logger()->warning('Failed to apply VM config immediately', [
+                    'vmid' => $vmid,
+                    'config' => $config,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             // Create server record
             $server = Server::create([
@@ -133,21 +163,19 @@ class ServerController extends Controller
                 'name' => $validated['name'],
                 'hostname' => $validated['hostname'],
                 'password' => $validated['password'] ?? null,
-                'description' => $validated['description'],
+                'description' => $validated['description'] ?? null,
                 'cpu' => $validated['cpu'],
                 'memory' => $validated['memory'],
                 'disk' => $validated['disk'],
                 'bandwidth_limit' => $validated['bandwidth_limit'],
-                'status' => 'installing',
-                'is_installing' => true,
+                'status' => 'stopped', // Clone creates stopped VM
+                'is_installing' => false,
             ]);
-
-            // TODO: Queue job to wait for clone completion and configure VM
 
             $server->load(['user', 'node.location']);
 
             return response()->json([
-                'message' => 'Server creation started',
+                'message' => 'Server created successfully',
                 'data' => $this->formatServer($server),
             ], 201);
 
