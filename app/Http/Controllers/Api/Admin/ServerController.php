@@ -124,13 +124,11 @@ class ServerController extends Controller
                 ]
             );
 
-            // Wait for clone to complete (max 5 minutes)
-            // The clone task returns a UPID string
+            // Wait for clone task to complete (max 5 minutes)
             if (is_string($taskUpid) && str_contains($taskUpid, 'UPID:')) {
                 try {
                     $client->waitForTask($taskUpid, 300);
                 } catch (\Exception $e) {
-                    // Clone might still be running, continue anyway
                     logger()->warning('Clone task wait failed', [
                         'task' => $taskUpid,
                         'error' => $e->getMessage(),
@@ -138,18 +136,48 @@ class ServerController extends Controller
                 }
             }
 
+            // CRITICAL: Wait for VM lock to clear (Convoy pattern)
+            // Proxmox locks VM during clone. Config updates fail on locked VMs.
+            $lockCleared = false;
+            $maxAttempts = 60; // 2 minutes max
+            for ($i = 0; $i < $maxAttempts; $i++) {
+                try {
+                    $vmConfig = $client->getVMConfig($vmid);
+                    
+                    // Check if lock property exists
+                    if (!isset($vmConfig['lock'])) {
+                        $lockCleared = true;
+                        logger()->info("VM {$vmid} lock cleared, safe to apply config");
+                        break;
+                    }
+                    
+                    logger()->info("VM {$vmid} still locked: {$vmConfig['lock']}, waiting... (attempt {$i}/{$maxAttempts})");
+                } catch (\Exception $e) {
+                    logger()->warning("Failed to check VM lock: {$e->getMessage()}");
+                }
+                sleep(2);
+            }
+
+            if (!$lockCleared) {
+                logger()->warning("VM {$vmid} lock did not clear within timeout, attempting config anyway");
+            }
+
             // Apply VM configuration (CPU, memory)
             // Convoy pattern: memory / 1048576 for bytes to MB
             $config = [
                 'cores' => $validated['cpu'],
-                'memory' => (int) ($validated['memory'] / 1048576), // bytes to MB (Convoy pattern)
+                'memory' => (int) ($validated['memory'] / 1048576), // bytes to MB
             ];
             
-            // Try to apply config (VM must exist)
             try {
-                $client->updateVMConfig($vmid, $config);
+                $result = $client->updateVMConfig($vmid, $config);
+                logger()->info("VM config applied successfully", [
+                    'vmid' => $vmid,
+                    'config' => $config,
+                    'result' => $result,
+                ]);
             } catch (\Exception $e) {
-                logger()->warning('Failed to apply VM config immediately', [
+                logger()->error('Failed to apply VM config', [
                     'vmid' => $vmid,
                     'config' => $config,
                     'error' => $e->getMessage(),
@@ -157,9 +185,13 @@ class ServerController extends Controller
             }
 
             // Resize disk if needed (uses scsi0 as default disk interface)
-            // Note: resizeDisk only grows disks, cannot shrink
             try {
                 $client->resizeDisk($vmid, 'scsi0', $validated['disk']);
+                logger()->info("Disk resized successfully", [
+                    'vmid' => $vmid,
+                    'disk' => 'scsi0',
+                    'size' => $validated['disk'],
+                ]);
             } catch (\Exception $e) {
                 logger()->warning('Failed to resize disk', [
                     'vmid' => $vmid,
