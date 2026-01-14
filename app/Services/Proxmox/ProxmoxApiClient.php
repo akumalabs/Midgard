@@ -36,7 +36,7 @@ class ProxmoxApiClient
     /**
      * Make a GET request to the Proxmox API.
      */
-    public function get(string $path, array $query = []): array
+    public function get(string $path, array $query = []): array|string
     {
         $response = $this->client->get($path, $query);
         return $this->handleResponse($response);
@@ -45,7 +45,7 @@ class ProxmoxApiClient
     /**
      * Make a POST request to the Proxmox API.
      */
-    public function post(string $path, array $data = []): array
+    public function post(string $path, array $data = []): array|string
     {
         $response = $this->client->post($path, $data);
         return $this->handleResponse($response);
@@ -54,7 +54,7 @@ class ProxmoxApiClient
     /**
      * Make a PUT request to the Proxmox API.
      */
-    public function put(string $path, array $data = []): array
+    public function put(string $path, array $data = []): array|string
     {
         $response = $this->client->put($path, $data);
         return $this->handleResponse($response);
@@ -63,7 +63,7 @@ class ProxmoxApiClient
     /**
      * Make a DELETE request to the Proxmox API.
      */
-    public function delete(string $path, array $data = []): array
+    public function delete(string $path, array $data = []): array|string
     {
         $response = $this->client->delete($path, $data);
         return $this->handleResponse($response);
