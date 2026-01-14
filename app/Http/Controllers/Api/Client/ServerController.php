@@ -211,6 +211,126 @@ class ServerController extends Controller
     }
 
     /**
+     * Update server password via cloud-init.
+     * Follows Convoy pattern for authentication settings.
+     */
+    public function updatePassword(Request $request, string $uuid): JsonResponse
+    {
+        $server = $request->user()
+            ->servers()
+            ->where('uuid', $uuid)
+            ->with('node')
+            ->firstOrFail();
+
+        if ($server->is_suspended) {
+            return response()->json([
+                'message' => 'Cannot update password of a suspended server',
+            ], 403);
+        }
+
+        $request->validate([
+            'password' => ['required', 'string', 'min:8', 'max:72'],
+        ]);
+
+        try {
+            $client = new ProxmoxApiClient($server->node);
+            $repository = (new \App\Repositories\Proxmox\Server\ProxmoxConfigRepository($client))
+                ->setServer($server);
+            
+            $repository->setPassword($request->password);
+            
+            logger()->info("Password updated for server {$server->vmid}");
+
+            return response()->json([
+                'message' => 'Password updated successfully. Reboot required to apply.',
+            ]);
+
+        } catch (ProxmoxApiException $e) {
+            return response()->json([
+                'message' => 'Failed to update password',
+                'error' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * Mount ISO to server.
+     */
+    public function mountIso(Request $request, string $uuid): JsonResponse
+    {
+        $server = $request->user()
+            ->servers()
+            ->where('uuid', $uuid)
+            ->with('node')
+            ->firstOrFail();
+
+        if ($server->is_suspended) {
+            return response()->json([
+                'message' => 'Cannot mount ISO on a suspended server',
+            ], 403);
+        }
+
+        $request->validate([
+            'storage' => ['required', 'string'],
+            'iso' => ['required', 'string'],
+        ]);
+
+        try {
+            $client = new ProxmoxApiClient($server->node);
+            $repository = (new \App\Repositories\Proxmox\Server\ProxmoxConfigRepository($client))
+                ->setServer($server);
+            
+            $repository->mountIso($request->storage, $request->iso);
+
+            return response()->json([
+                'message' => 'ISO mounted successfully',
+            ]);
+
+        } catch (ProxmoxApiException $e) {
+            return response()->json([
+                'message' => 'Failed to mount ISO',
+                'error' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * Unmount ISO from server.
+     */
+    public function unmountIso(Request $request, string $uuid): JsonResponse
+    {
+        $server = $request->user()
+            ->servers()
+            ->where('uuid', $uuid)
+            ->with('node')
+            ->firstOrFail();
+
+        if ($server->is_suspended) {
+            return response()->json([
+                'message' => 'Cannot unmount ISO from a suspended server',
+            ], 403);
+        }
+
+        try {
+            $client = new ProxmoxApiClient($server->node);
+            $repository = (new \App\Repositories\Proxmox\Server\ProxmoxConfigRepository($client))
+                ->setServer($server);
+            
+            $repository->unmountIso();
+
+            return response()->json([
+                'message' => 'ISO unmounted successfully',
+            ]);
+
+        } catch (ProxmoxApiException $e) {
+            return response()->json([
+                'message' => 'Failed to unmount ISO',
+                'error' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
      * Format server for API response.
      */
     protected function formatServer(Server $server, bool $detailed = false): array

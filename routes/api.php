@@ -86,6 +86,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/servers/{uuid}/status', [ClientServerController::class, 'status']);
         Route::post('/servers/{uuid}/power', [ClientServerController::class, 'power']);
         Route::get('/servers/{uuid}/console', [ClientServerController::class, 'console']);
+        
+        // Server Settings (Convoy pattern)
+        Route::post('/servers/{uuid}/settings/password', [ClientServerController::class, 'updatePassword']);
+        Route::post('/servers/{uuid}/settings/iso/mount', [ClientServerController::class, 'mountIso']);
+        Route::post('/servers/{uuid}/settings/iso/unmount', [ClientServerController::class, 'unmountIso']);
 
         // Backups
         Route::get('/servers/{uuid}/backups', [BackupController::class, 'index']);

@@ -74,4 +74,20 @@ export const clientServerApi = {
         const response = await api.get(`/client/servers/${uuid}/console`);
         return response.data.data;
     },
+
+    // Settings API (Convoy pattern)
+    updatePassword: async (uuid: string, password: string): Promise<{ message: string }> => {
+        const response = await api.post(`/client/servers/${uuid}/settings/password`, { password });
+        return response.data;
+    },
+
+    mountIso: async (uuid: string, storage: string, iso: string): Promise<{ message: string }> => {
+        const response = await api.post(`/client/servers/${uuid}/settings/iso/mount`, { storage, iso });
+        return response.data;
+    },
+
+    unmountIso: async (uuid: string): Promise<{ message: string }> => {
+        const response = await api.post(`/client/servers/${uuid}/settings/iso/unmount`);
+        return response.data;
+    },
 };
