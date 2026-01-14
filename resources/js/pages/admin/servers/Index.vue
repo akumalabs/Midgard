@@ -100,9 +100,23 @@ const openCreate = () => {
 // Create mutation
 const createMutation = useMutation({
     mutationFn: async () => {
+        // Sanitize hostname: lowercase, replace spaces with hyphens, remove invalid chars
+        const sanitizeHostname = (name: string): string => {
+            return name
+                .toLowerCase()
+                .replace(/\s+/g, '-')           // Replace spaces with hyphens
+                .replace(/[^a-z0-9-]/g, '')     // Remove invalid characters
+                .replace(/-+/g, '-')            // Replace multiple hyphens with single
+                .replace(/^-|-$/g, '');         // Remove leading/trailing hyphens
+        };
+        
+        const hostname = formData.value.hostname 
+            ? sanitizeHostname(formData.value.hostname)
+            : sanitizeHostname(formData.value.name);
+            
         const data: any = {
             name: formData.value.name,
-            hostname: formData.value.hostname || formData.value.name,
+            hostname: hostname,
             user_id: formData.value.user_id,
             node_id: formData.value.node_id,
             template_vmid: formData.value.template_vmid,

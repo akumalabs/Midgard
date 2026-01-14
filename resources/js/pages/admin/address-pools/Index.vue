@@ -307,7 +307,7 @@ onUnmounted(() => {
             </div>
 
             <!-- Pool Table -->
-            <div v-else class="card">
+            <div v-else class="card overflow-visible">
                 <div class="overflow-x-auto">
                     <table class="table">
                         <thead>
@@ -337,7 +337,7 @@ onUnmounted(() => {
                                     </button>
                                     <div 
                                         v-if="openMenuId === pool.id" 
-                                        class="dropdown-menu absolute right-0 bottom-full mb-1 bg-secondary-800 border border-secondary-700 rounded-lg shadow-lg z-50 py-1 min-w-32"
+                                        class="dropdown-menu absolute right-0 top-full mt-1 bg-secondary-800 border border-secondary-700 rounded-lg shadow-lg z-50 py-1 min-w-32"
                                     >
                                         <button @click="openEditPool(pool)" class="w-full text-left px-4 py-2 hover:bg-secondary-700 text-white text-sm">
                                             Edit
@@ -398,8 +398,8 @@ onUnmounted(() => {
             </div>
 
             <!-- Address Table -->
-            <div v-else class="card">
-                <div class="overflow-x-auto">
+            <div v-else class="card overflow-visible">
+                <div class="overflow-x-auto overflow-y-visible">
                     <table class="table">
                         <thead>
                             <tr>
@@ -430,7 +430,7 @@ onUnmounted(() => {
                                     </button>
                                     <div 
                                         v-if="addressMenuId === addr.id" 
-                                        class="dropdown-menu absolute right-0 bottom-full mb-1 bg-secondary-800 border border-secondary-700 rounded-lg shadow-lg z-50 py-1 min-w-32"
+                                        class="dropdown-menu absolute right-0 top-full mt-1 bg-secondary-800 border border-secondary-700 rounded-lg shadow-lg z-50 py-1 min-w-32"
                                     >
                                         <button @click="openEditAddress(addr)" class="w-full text-left px-4 py-2 hover:bg-secondary-700 text-white text-sm">
                                             Edit
