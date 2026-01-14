@@ -166,45 +166,45 @@ class ProxmoxApiClient
     }
 
     /**
-     * Start a VM.
+     * Start a VM. Returns UPID.
      */
-    public function startVM(int $vmid, string $nodeName = null): array
+    public function startVM(int $vmid, string $nodeName = null): array|string
     {
         $nodeName = $nodeName ?? $this->getProxmoxNodeName();
         return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/start");
     }
 
     /**
-     * Stop a VM.
+     * Stop a VM. Returns UPID.
      */
-    public function stopVM(int $vmid, string $nodeName = null): array
+    public function stopVM(int $vmid, string $nodeName = null): array|string
     {
         $nodeName = $nodeName ?? $this->getProxmoxNodeName();
         return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/stop");
     }
 
     /**
-     * Shutdown a VM (graceful).
+     * Shutdown a VM (graceful). Returns UPID.
      */
-    public function shutdownVM(int $vmid, string $nodeName = null): array
+    public function shutdownVM(int $vmid, string $nodeName = null): array|string
     {
         $nodeName = $nodeName ?? $this->getProxmoxNodeName();
         return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/shutdown");
     }
 
     /**
-     * Reboot a VM.
+     * Reboot a VM. Returns UPID.
      */
-    public function rebootVM(int $vmid, string $nodeName = null): array
+    public function rebootVM(int $vmid, string $nodeName = null): array|string
     {
         $nodeName = $nodeName ?? $this->getProxmoxNodeName();
         return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/reboot");
     }
 
     /**
-     * Reset a VM (hard reboot).
+     * Reset a VM (hard reboot). Returns UPID.
      */
-    public function resetVM(int $vmid, string $nodeName = null): array
+    public function resetVM(int $vmid, string $nodeName = null): array|string
     {
         $nodeName = $nodeName ?? $this->getProxmoxNodeName();
         return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/reset");
@@ -212,8 +212,9 @@ class ProxmoxApiClient
 
     /**
      * Clone a VM from template.
+     * Returns UPID string for the clone task.
      */
-    public function cloneVM(int $templateVmid, int $newVmid, array $options = [], string $nodeName = null): array
+    public function cloneVM(int $templateVmid, int $newVmid, array $options = [], string $nodeName = null): array|string
     {
         $nodeName = $nodeName ?? $this->getProxmoxNodeName();
         $data = array_merge([
@@ -225,9 +226,9 @@ class ProxmoxApiClient
     }
 
     /**
-     * Delete a VM.
+     * Delete a VM. Returns UPID.
      */
-    public function deleteVM(int $vmid, string $nodeName = null): array
+    public function deleteVM(int $vmid, string $nodeName = null): array|string
     {
         $nodeName = $nodeName ?? $this->getProxmoxNodeName();
         return $this->delete("/nodes/{$nodeName}/qemu/{$vmid}");
