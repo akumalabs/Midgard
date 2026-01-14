@@ -11,6 +11,10 @@ use App\Http\Controllers\Api\Admin\ActivityLogController;
 use App\Http\Controllers\Api\Client\ServerController as ClientServerController;
 use App\Http\Controllers\Api\Client\BackupController;
 use App\Http\Controllers\Api\Client\SshKeyController;
+use App\Http\Controllers\Api\Server\ServerBackupController;
+use App\Http\Controllers\Api\Server\ServerNetworkController;
+use App\Http\Controllers\Api\Server\ServerFirewallController;
+use App\Http\Controllers\Api\Server\ServerConsoleController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -54,6 +58,19 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('servers', AdminServerController::class);
         Route::post('/servers/{server}/power', [AdminServerController::class, 'power']);
         Route::get('/servers/{server}/status', [AdminServerController::class, 'status']);
+
+        // Extended Server Management (Deep Convoy Integration)
+        Route::apiResource('servers.backups', ServerBackupController::class)->only(['index', 'store', 'destroy']);
+        Route::post('/servers/{server}/backups/{backup}/restore', [ServerBackupController::class, 'restore']);
+
+        Route::apiResource('servers.network', ServerNetworkController::class)->only(['index', 'store', 'destroy']);
+
+        Route::get('/servers/{server}/firewall', [ServerFirewallController::class, 'index']);
+        Route::post('/servers/{server}/firewall', [ServerFirewallController::class, 'store']);
+        Route::post('/servers/{server}/firewall/toggle', [ServerFirewallController::class, 'toggle']);
+        Route::delete('/servers/{server}/firewall/{pos}', [ServerFirewallController::class, 'destroy']);
+
+        Route::get('/servers/{server}/console/vnc', [ServerConsoleController::class, 'vnc']);
 
         // Users
         Route::apiResource('users', UserController::class);
