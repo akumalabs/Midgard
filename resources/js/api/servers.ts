@@ -65,7 +65,7 @@ export const clientServerApi = {
         return response.data.data;
     },
 
-    power: async (uuid: string, action: 'start' | 'stop' | 'restart' | 'shutdown'): Promise<{ status: string }> => {
+    power: async (uuid: string, action: 'start' | 'stop' | 'restart' | 'shutdown' | 'kill'): Promise<{ status: string }> => {
         const response = await api.post(`/client/servers/${uuid}/power`, { action });
         return response.data.data;
     },

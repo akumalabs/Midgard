@@ -171,16 +171,16 @@ class ProxmoxApiClient
     public function startVM(int $vmid, string $nodeName = null): array|string
     {
         $nodeName = $nodeName ?? $this->getProxmoxNodeName();
-        return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/start");
+        return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/start", ['timeout' => 30]);
     }
 
     /**
-     * Stop a VM. Returns UPID.
+     * Stop a VM (force kill). Returns UPID.
      */
     public function stopVM(int $vmid, string $nodeName = null): array|string
     {
         $nodeName = $nodeName ?? $this->getProxmoxNodeName();
-        return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/stop");
+        return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/stop", ['timeout' => 30]);
     }
 
     /**
@@ -189,16 +189,16 @@ class ProxmoxApiClient
     public function shutdownVM(int $vmid, string $nodeName = null): array|string
     {
         $nodeName = $nodeName ?? $this->getProxmoxNodeName();
-        return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/shutdown");
+        return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/shutdown", ['timeout' => 30]);
     }
 
     /**
-     * Reboot a VM. Returns UPID.
+     * Reboot a VM (graceful restart). Returns UPID.
      */
     public function rebootVM(int $vmid, string $nodeName = null): array|string
     {
         $nodeName = $nodeName ?? $this->getProxmoxNodeName();
-        return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/reboot");
+        return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/reboot", ['timeout' => 30]);
     }
 
     /**

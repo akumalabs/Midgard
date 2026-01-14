@@ -105,24 +105,28 @@ class ServerController extends Controller
         }
 
         $request->validate([
-            'action' => ['required', 'in:start,stop,restart,shutdown'],
+            'action' => ['required', 'in:start,stop,restart,shutdown,kill'],
         ]);
 
         try {
             $client = new ProxmoxApiClient($server->node);
             $action = $request->action;
+            
+            logger()->info("Power action {$action} on server {$server->vmid}");
 
-            match ($action) {
+            $result = match ($action) {
                 'start' => $client->startVM((int) $server->vmid),
-                'stop' => $client->stopVM((int) $server->vmid),
+                'stop', 'kill' => $client->stopVM((int) $server->vmid),
                 'shutdown' => $client->shutdownVM((int) $server->vmid),
                 'restart' => $client->rebootVM((int) $server->vmid),
             };
+            
+            logger()->info("Power action result", ['result' => $result]);
 
             // Update status
             $newStatus = match ($action) {
                 'start', 'restart' => 'running',
-                'stop', 'shutdown' => 'stopped',
+                'stop', 'shutdown', 'kill' => 'stopped',
             };
             $server->update(['status' => $newStatus]);
 
@@ -132,10 +136,27 @@ class ServerController extends Controller
             ]);
 
         } catch (ProxmoxApiException $e) {
+            logger()->error("ProxmoxApiException in power action", [
+                'action' => $request->action,
+                'vmid' => $server->vmid,
+                'error' => $e->getMessage(),
+            ]);
             return response()->json([
                 'message' => "Failed to {$request->action} server",
                 'error' => $e->getMessage(),
             ], 422);
+        } catch (\Exception $e) {
+            logger()->error("General exception in power action", [
+                'action' => $request->action,
+                'vmid' => $server->vmid,
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+            return response()->json([
+                'message' => "Failed to {$request->action} server",
+                'error' => $e->getMessage(),
+            ], 500);
         }
     }
 
