@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Data\Node\NodeStatusData;
 use App\Http\Controllers\Controller;
 use App\Models\Location;
 use App\Models\Node;
+use App\Repositories\Proxmox\Node\ProxmoxNodeRepository;
 use App\Services\Proxmox\ProxmoxApiClient;
 use App\Services\Proxmox\ProxmoxApiException;
 use Illuminate\Http\JsonResponse;
@@ -190,37 +192,42 @@ class NodeController extends Controller
 
     /**
      * Get node statistics from Proxmox.
+     * Uses Convoy-style ProxmoxNodeRepository for consistency.
      */
     public function stats(Node $node): JsonResponse
     {
         try {
             $client = new ProxmoxApiClient($node);
-            $status = $client->getNodeStatus();
+            $repository = (new ProxmoxNodeRepository($client))->setNode($node);
+            $status = $repository->getStatus();
+            
+            // Also get storage info
+            $storages = $repository->getStorages();
 
             return response()->json([
                 'data' => [
-                    'uptime' => $status['uptime'] ?? 0,
+                    'status' => $status->status,
+                    'uptime' => $status->uptime,
+                    'uptime_formatted' => $status->uptimeFormatted(),
                     'cpu' => [
-                        'usage' => ($status['cpu'] ?? 0) * 100,
-                        'cores' => $status['cpuinfo']['cpus'] ?? 0,
-                        'model' => $status['cpuinfo']['model'] ?? 'Unknown',
+                        'usage' => $status->cpuPercent(),
+                        'cores' => $status->cpuCores,
                     ],
                     'memory' => [
-                        'used' => $status['memory']['used'] ?? 0,
-                        'total' => $status['memory']['total'] ?? 0,
-                        'free' => $status['memory']['free'] ?? 0,
-                        'usage' => $status['memory']['total'] > 0
-                            ? round(($status['memory']['used'] / $status['memory']['total']) * 100, 2)
-                            : 0,
+                        'used' => $status->memoryUsed,
+                        'total' => $status->memoryTotal,
+                        'free' => $status->memoryFree,
+                        'usage' => $status->memoryPercent(),
                     ],
-                    'disk' => [
-                        'used' => $status['rootfs']['used'] ?? 0,
-                        'total' => $status['rootfs']['total'] ?? 0,
-                        'free' => $status['rootfs']['free'] ?? 0,
-                        'usage' => $status['rootfs']['total'] > 0
-                            ? round(($status['rootfs']['used'] / $status['rootfs']['total']) * 100, 2)
-                            : 0,
-                    ],
+                    'storages' => array_map(fn($s) => [
+                        'name' => $s->storage,
+                        'type' => $s->type,
+                        'used' => $s->used,
+                        'total' => $s->total,
+                        'usage' => $s->usagePercent(),
+                        'supports_images' => $s->supportsImages(),
+                        'supports_backup' => $s->supportsBackup(),
+                    ], $storages),
                 ],
             ]);
         } catch (ProxmoxApiException $e) {
