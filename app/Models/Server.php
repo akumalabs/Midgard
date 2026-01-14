@@ -86,6 +86,22 @@ class Server extends Model
     }
 
     /**
+     * Get the deployments for this server.
+     */
+    public function deployments(): HasMany
+    {
+        return $this->hasMany(Deployment::class);
+    }
+
+    /**
+     * Get the activity logs for this server.
+     */
+    public function activityLogs()
+    {
+        return $this->morphMany(ActivityLog::class, 'subject');
+    }
+
+    /**
      * Get the primary address for this server.
      */
     public function primaryAddress()
