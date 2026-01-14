@@ -236,10 +236,27 @@ class ProxmoxApiClient
     /**
      * Update VM configuration.
      */
-    public function updateVMConfig(int $vmid, array $config, string $nodeName = null): array
+    public function updateVMConfig(int $vmid, array $config, string $nodeName = null): array|string
     {
         $nodeName = $nodeName ?? $this->getProxmoxNodeName();
         return $this->put("/nodes/{$nodeName}/qemu/{$vmid}/config", $config);
+    }
+
+    /**
+     * Resize a VM disk.
+     * Based on Convoy's ProxmoxDiskRepository::resizeDisk
+     */
+    public function resizeDisk(int $vmid, string $disk, int $sizeBytes, string $nodeName = null): array|string
+    {
+        $nodeName = $nodeName ?? $this->getProxmoxNodeName();
+        
+        // Convert bytes to kibibytes for Proxmox
+        $kibibytes = (int) floor($sizeBytes / 1024);
+        
+        return $this->put("/nodes/{$nodeName}/qemu/{$vmid}/resize", [
+            'disk' => $disk,
+            'size' => "{$kibibytes}K",
+        ]);
     }
 
     // =====================

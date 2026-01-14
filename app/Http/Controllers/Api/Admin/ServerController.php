@@ -138,7 +138,7 @@ class ServerController extends Controller
                 }
             }
 
-            // Apply VM configuration (CPU, memory, disk resize is separate)
+            // Apply VM configuration (CPU, memory)
             $config = [
                 'cores' => $validated['cpu'],
                 'memory' => (int) ($validated['memory'] / 1024 / 1024), // bytes to MB for Proxmox
@@ -151,6 +151,19 @@ class ServerController extends Controller
                 logger()->warning('Failed to apply VM config immediately', [
                     'vmid' => $vmid,
                     'config' => $config,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            // Resize disk if needed (uses scsi0 as default disk interface)
+            // Note: resizeDisk only grows disks, cannot shrink
+            try {
+                $client->resizeDisk($vmid, 'scsi0', $validated['disk']);
+            } catch (\Exception $e) {
+                logger()->warning('Failed to resize disk', [
+                    'vmid' => $vmid,
+                    'disk' => 'scsi0',
+                    'size' => $validated['disk'],
                     'error' => $e->getMessage(),
                 ]);
             }
