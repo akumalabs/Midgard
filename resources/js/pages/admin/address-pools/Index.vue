@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query';
 import { addressPoolApi, nodeApi, adminServerApi } from '@/api';
 import type { AddressPool, Address } from '@/api/addressPools';
@@ -256,6 +256,23 @@ const toggleNode = (nodeId: number) => {
         poolFormData.value.node_ids.push(nodeId);
     }
 };
+
+// Close dropdowns on click outside
+const handleClickOutside = (event: MouseEvent) => {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.dropdown-menu') && !target.closest('.dropdown-trigger')) {
+        openMenuId.value = null;
+        addressMenuId.value = null;
+    }
+};
+
+onMounted(() => {
+    document.addEventListener('click', handleClickOutside);
+});
+
+onUnmounted(() => {
+    document.removeEventListener('click', handleClickOutside);
+});
 </script>
 
 <template>
@@ -314,13 +331,13 @@ const toggleNode = (nodeId: number) => {
                                 <td class="text-right relative" @click.stop>
                                     <button 
                                         @click="openMenuId = openMenuId === pool.id ? null : pool.id"
-                                        class="btn-ghost btn-sm"
+                                        class="btn-ghost btn-sm dropdown-trigger"
                                     >
                                         <EllipsisVerticalIcon class="w-5 h-5" />
                                     </button>
                                     <div 
                                         v-if="openMenuId === pool.id" 
-                                        class="absolute right-0 bottom-full mb-1 bg-secondary-800 border border-secondary-700 rounded-lg shadow-lg z-50 py-1 min-w-32"
+                                        class="dropdown-menu absolute right-0 bottom-full mb-1 bg-secondary-800 border border-secondary-700 rounded-lg shadow-lg z-50 py-1 min-w-32"
                                     >
                                         <button @click="openEditPool(pool)" class="w-full text-left px-4 py-2 hover:bg-secondary-700 text-white text-sm">
                                             Edit
@@ -407,13 +424,13 @@ const toggleNode = (nodeId: number) => {
                                 <td class="text-right relative">
                                     <button 
                                         @click="addressMenuId = addressMenuId === addr.id ? null : addr.id"
-                                        class="btn-ghost btn-sm"
+                                        class="btn-ghost btn-sm dropdown-trigger"
                                     >
                                         <EllipsisVerticalIcon class="w-5 h-5" />
                                     </button>
                                     <div 
                                         v-if="addressMenuId === addr.id" 
-                                        class="absolute right-0 bottom-full mb-1 bg-secondary-800 border border-secondary-700 rounded-lg shadow-lg z-50 py-1 min-w-32"
+                                        class="dropdown-menu absolute right-0 bottom-full mb-1 bg-secondary-800 border border-secondary-700 rounded-lg shadow-lg z-50 py-1 min-w-32"
                                     >
                                         <button @click="openEditAddress(addr)" class="w-full text-left px-4 py-2 hover:bg-secondary-700 text-white text-sm">
                                             Edit
