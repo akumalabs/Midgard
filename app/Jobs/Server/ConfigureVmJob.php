@@ -83,19 +83,26 @@ class ConfigureVmJob implements ShouldQueue
             logger()->warning("Cloudinit regenerate failed (may not be supported): " . $e->getMessage());
         }
         
-        // Update server status
-        $this->server->update([
-            'status' => 'installed',
-            'installed_at' => now(),
-        ]);
-        
-        // Start the VM
+        // Start the VM first
         try {
             logger()->info("Starting VM {$this->server->vmid}...");
             $powerRepo->start();
             logger()->info("Server {$this->server->vmid} started successfully");
+            
+            // Update server status to running after successful start
+            $this->server->update([
+                'status' => 'running',
+                'installed_at' => now(),
+                'is_installing' => false,
+            ]);
         } catch (\Exception $e) {
             logger()->warning("Failed to start VM after config: " . $e->getMessage());
+            // Still mark as stopped if start failed
+            $this->server->update([
+                'status' => 'stopped',
+                'installed_at' => now(),
+                'is_installing' => false,
+            ]);
         }
         
         logger()->info("Server {$this->server->vmid} configuration complete");

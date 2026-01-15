@@ -114,10 +114,11 @@ class ProxmoxCloudinitRepository extends ProxmoxRepository
 
     /**
      * Regenerate cloud-init image.
+     * Note: This uses PUT method as per Proxmox API specification.
      */
     public function regenerate(): array|string
     {
-        return $this->client->post(
+        return $this->client->put(
             "/nodes/{$this->node->cluster}/qemu/{$this->server->vmid}/cloudinit",
             []
         );

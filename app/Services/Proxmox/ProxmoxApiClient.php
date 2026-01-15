@@ -34,6 +34,17 @@ class ProxmoxApiClient
     }
 
     /**
+     * Set/update the node context and recreate client.
+     * Required by ProxmoxRepository::setServer()
+     */
+    public function setNode(Node $node): static
+    {
+        $this->node = $node;
+        $this->client = $this->createClient();
+        return $this;
+    }
+
+    /**
      * Make a GET request to the Proxmox API.
      */
     public function get(string $path, array $query = []): array|string
