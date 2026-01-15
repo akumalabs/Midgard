@@ -31,24 +31,38 @@ const uuid = route.params.uuid as string;
 
 const deployment = ref<Deployment | null>(null);
 const polling = ref<ReturnType<typeof setInterval> | null>(null);
+const hasActiveDeployment = ref(false);
 
 const fetchDeployment = async () => {
     try {
         const data = await clientServerApi.getDeployment(uuid);
-        deployment.value = data;
         
-        // Stop polling if completed or failed
-        if (data && (data.status === 'completed' || data.status === 'failed')) {
-            stopPolling();
-            // Auto-hide after 3 seconds on completion
-            if (data.status === 'completed') {
-                setTimeout(() => {
-                    deployment.value = null;
-                }, 3000);
+        // Only set deployment if we have valid data with steps
+        if (data && data.uuid && data.steps && data.steps.length > 0) {
+            deployment.value = data;
+            hasActiveDeployment.value = true;
+            
+            // Stop polling if completed or failed
+            if (data.status === 'completed' || data.status === 'failed') {
+                stopPolling();
+                // Auto-hide after 3 seconds on completion
+                if (data.status === 'completed') {
+                    setTimeout(() => {
+                        deployment.value = null;
+                        hasActiveDeployment.value = false;
+                    }, 3000);
+                }
             }
+        } else {
+            // No active deployment
+            deployment.value = null;
+            hasActiveDeployment.value = false;
+            stopPolling();
         }
     } catch (e) {
         console.error('Failed to fetch deployment:', e);
+        deployment.value = null;
+        hasActiveDeployment.value = false;
     }
 };
 
@@ -91,7 +105,7 @@ const getStepClass = (status: string) => {
     }
 };
 
-const isActive = computed(() => deployment.value !== null);
+const isActive = computed(() => hasActiveDeployment.value && deployment.value !== null);
 
 const title = computed(() => {
     if (!deployment.value) return '';
