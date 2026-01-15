@@ -56,8 +56,8 @@ const formData = ref({
     memory: 1,      // GB
     disk: 10,       // GB
     bandwidth_limit: 0,  // TB (0 = unlimited)
-    ip_address: '',
     address_pool_id: '' as string | number,
+    address_id: '' as string | number,
 });
 const formError = ref<string | null>(null);
 
@@ -74,6 +74,32 @@ watch(() => formData.value.node_id, async (nodeId) => {
     } else {
         templateGroups.value = [];
     }
+    // Reset address selection when node changes
+    formData.value.address_pool_id = '';
+    formData.value.address_id = '';
+    availableAddresses.value = [];
+});
+
+// State for available addresses
+const availableAddresses = ref<Array<{ id: number; address: string; cidr: number; gateway: string }>>([]);
+const loadingAddresses = ref(false);
+
+// Watch for pool selection to load available addresses
+watch(() => formData.value.address_pool_id, async (poolId) => {
+    if (poolId) {
+        loadingAddresses.value = true;
+        try {
+            const pool = await addressPoolApi.get(Number(poolId));
+            // Filter only unassigned addresses
+            availableAddresses.value = (pool.addresses || []).filter(addr => !addr.server_id);
+        } catch (e) {
+            availableAddresses.value = [];
+        }
+        loadingAddresses.value = false;
+    } else {
+        availableAddresses.value = [];
+    }
+    formData.value.address_id = '';
 });
 
 const openCreate = () => {
@@ -89,10 +115,11 @@ const openCreate = () => {
         memory: 1,      // GB
         disk: 10,       // GB
         bandwidth_limit: 0,  // TB (0 = unlimited)
-        ip_address: '',
         address_pool_id: '',
+        address_id: '',
     };
     templateGroups.value = [];
+    availableAddresses.value = [];
     formError.value = null;
     showModal.value = true;
 };
@@ -133,12 +160,9 @@ const createMutation = useMutation({
         if (formData.value.vmid) {
             data.vmid = Number(formData.value.vmid);
         }
-        // IP assignment
-        if (formData.value.address_pool_id) {
-            data.address_pool_id = formData.value.address_pool_id;
-        }
-        if (formData.value.ip_address) {
-            data.ip_address = formData.value.ip_address;
+        // IP assignment - send the selected address ID
+        if (formData.value.address_id) {
+            data.address_ids = [Number(formData.value.address_id)];
         }
         return adminServerApi.create(data);
     },
@@ -402,19 +426,35 @@ const statusColor = (status: string) => {
                         <!-- Section: Network -->
                         <div class="p-4 bg-secondary-800/30 rounded-lg space-y-4">
                             <h4 class="text-sm font-medium text-secondary-300 border-b border-secondary-700 pb-2">Network</h4>
-                            <div class="grid grid-cols-2 gap-4">
+                            <div class="space-y-4">
                                 <div>
                                     <label class="label">IP Pool</label>
                                     <select v-model="formData.address_pool_id" class="input">
-                                        <option value="">No auto IP assignment</option>
+                                        <option value="">No IP assignment</option>
                                         <option v-for="pool in addressPools" :key="pool.id" :value="pool.id">
-                                            {{ pool.name }} ({{ pool.available_count || 0 }} available)
+                                            {{ pool.name }} ({{ pool.available_addresses || pool.addresses_count || 0 }} available)
                                         </option>
                                     </select>
                                 </div>
-                                <div>
-                                    <label class="label">Manual IP (optional)</label>
-                                    <input v-model="formData.ip_address" type="text" class="input" placeholder="Leave blank to auto-assign" />
+                                
+                                <!-- IP Address Selection -->
+                                <div v-if="formData.address_pool_id">
+                                    <label class="label">Select IP Address</label>
+                                    <div v-if="loadingAddresses" class="text-secondary-400 text-sm py-2">
+                                        Loading available addresses...
+                                    </div>
+                                    <div v-else-if="availableAddresses.length === 0" class="text-yellow-400 text-sm py-2">
+                                        No available addresses in this pool
+                                    </div>
+                                    <select v-else v-model="formData.address_id" class="input" required>
+                                        <option value="">Select an IP address</option>
+                                        <option v-for="addr in availableAddresses" :key="addr.id" :value="addr.id">
+                                            {{ addr.address }}/{{ addr.cidr }} (GW: {{ addr.gateway }})
+                                        </option>
+                                    </select>
+                                    <p v-if="formData.address_id && availableAddresses.length > 0" class="text-xs text-secondary-500 mt-1">
+                                        Selected: {{ availableAddresses.find(a => a.id === Number(formData.address_id))?.address }}
+                                    </p>
                                 </div>
                             </div>
                         </div>
