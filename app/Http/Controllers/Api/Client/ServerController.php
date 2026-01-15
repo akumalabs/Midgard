@@ -260,7 +260,7 @@ class ServerController extends Controller
 
     /**
      * Reinstall server from template.
-     * Uses Convoy-style job chain for safe reinstallation.
+     * Uses Convoy-style deployment tracking for progress visibility.
      */
     public function reinstall(Request $request, string $uuid): JsonResponse
     {
@@ -283,11 +283,71 @@ class ServerController extends Controller
 
         $template = \App\Models\Template::findOrFail($request->template_id);
 
-        // Dispatch reinstall job chain
-        \App\Jobs\Server\ReinstallServerJob::dispatch($server, $template, $request->password);
+        // Create deployment with steps for tracking
+        $deploymentService = app(\App\Services\Servers\DeploymentService::class);
+        $deployment = $deploymentService->create($server, [
+            'Stopping VM',
+            'Deleting VM',
+            'Cloning template',
+            'Configuring server',
+            'Updating password',
+            'Starting VM',
+        ]);
+
+        // Dispatch reinstall job with deployment ID
+        \App\Jobs\Server\ReinstallServerJob::dispatch(
+            $server, 
+            $template, 
+            $request->password,
+            $deployment->id
+        );
 
         return response()->json([
             'message' => 'Server reinstall started',
+            'deployment_uuid' => $deployment->uuid,
+        ]);
+    }
+
+    /**
+     * Get current active deployment for a server.
+     */
+    public function currentDeployment(Request $request, string $uuid): JsonResponse
+    {
+        $server = $request->user()
+            ->servers()
+            ->where('uuid', $uuid)
+            ->firstOrFail();
+
+        $deployment = $server->deployments()
+            ->whereIn('status', ['pending', 'running'])
+            ->with('steps')
+            ->latest()
+            ->first();
+
+        if (!$deployment) {
+            return response()->json([
+                'data' => null,
+            ]);
+        }
+
+        return response()->json([
+            'data' => [
+                'uuid' => $deployment->uuid,
+                'status' => $deployment->status,
+                'error' => $deployment->error,
+                'started_at' => $deployment->started_at?->toIso8601String(),
+                'completed_at' => $deployment->completed_at?->toIso8601String(),
+                'steps' => $deployment->steps->map(fn($step) => [
+                    'name' => $step->name,
+                    'status' => $step->status,
+                    'error' => $step->error,
+                    'started_at' => $step->started_at?->toIso8601String(),
+                    'completed_at' => $step->completed_at?->toIso8601String(),
+                    'duration' => $step->started_at && $step->completed_at 
+                        ? $step->started_at->diffInSeconds($step->completed_at) 
+                        : null,
+                ]),
+            ],
         ]);
     }
 

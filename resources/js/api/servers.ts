@@ -117,11 +117,31 @@ export const clientServerApi = {
     },
 
     // Reinstall
-    reinstall: async (uuid: string, templateId: number, password: string): Promise<{ message: string }> => {
+    reinstall: async (uuid: string, templateId: number, password: string): Promise<{ message: string; deployment_uuid: string }> => {
         const response = await api.post(`/client/servers/${uuid}/settings/reinstall`, {
             template_id: templateId,
             password
         });
         return response.data;
+    },
+
+    // Deployment status
+    getDeployment: async (uuid: string): Promise<{
+        uuid: string;
+        status: string;
+        error?: string;
+        started_at?: string;
+        completed_at?: string;
+        steps: Array<{
+            name: string;
+            status: string;
+            error?: string;
+            started_at?: string;
+            completed_at?: string;
+            duration?: number;
+        }>;
+    } | null> => {
+        const response = await api.get(`/client/servers/${uuid}/deployment`);
+        return response.data.data;
     },
 };

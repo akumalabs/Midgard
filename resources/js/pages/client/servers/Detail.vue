@@ -9,6 +9,7 @@ import BackupManager from '@/components/server/BackupManager.vue';
 import NetworkManager from '@/components/server/NetworkManager.vue';
 import FirewallManager from '@/components/server/FirewallManager.vue';
 import ConsoleViewer from '@/components/server/ConsoleViewer.vue';
+import DeploymentProgress from '@/components/server/DeploymentProgress.vue';
 
 import {
     ArrowLeftIcon,
@@ -257,6 +258,9 @@ const diskUsed = computed(() => server.value?.disk || 0);
             <!-- Modals -->
             <ServerSettingsModal :server-uuid="uuid" :show="showSettings" @close="showSettings = false" />
             <IsoModal :server-uuid="uuid" :show="showIso" @close="showIso = false" />
+            
+            <!-- Deployment Progress Overlay -->
+            <DeploymentProgress />
         </template>
     </div>
 </template>

@@ -117,6 +117,7 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // Reinstall
         Route::post('/servers/{uuid}/settings/reinstall', [ClientServerController::class, 'reinstall']);
+        Route::get('/servers/{uuid}/deployment', [ClientServerController::class, 'currentDeployment']);
 
         // Backups
         Route::get('/servers/{uuid}/backups', [BackupController::class, 'index']);
