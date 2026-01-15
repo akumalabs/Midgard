@@ -143,8 +143,17 @@ class ConfigureVmJob implements ShouldQueue
         
         // Apply cloud-init config directly via Proxmox API
         if (!empty($cloudinitParams)) {
+            // Add DNS settings
+            $cloudinitParams['nameserver'] = '1.1.1.1 8.8.8.8';
+            if (str_contains($this->server->hostname, '.')) {
+                $cloudinitParams['searchdomain'] = substr($this->server->hostname, strpos($this->server->hostname, '.') + 1);
+            }
+
             $client->updateVMConfig($this->server->vmid, $cloudinitParams);
             logger()->info("Applied cloud-init config", $cloudinitParams);
         }
+
+        // Ensure VM starts on boot
+        $configRepo->update(['onboot' => 1]);
     }
 }

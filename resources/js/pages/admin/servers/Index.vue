@@ -201,9 +201,19 @@ const handlePower = (server: Server, action: 'start' | 'stop' | 'restart') => {
     powerMutation.mutate({ id: server.id, action });
 };
 
+const showDeleteModal = ref(false);
+const serverToDelete = ref<Server | null>(null);
+
 const confirmDelete = (server: Server) => {
-    if (confirm(`Delete server "${server.name}"? This cannot be undone.`)) {
-        deleteMutation.mutate(server.id);
+    serverToDelete.value = server;
+    showDeleteModal.value = true;
+};
+
+const handleDelete = () => {
+    if (serverToDelete.value) {
+        deleteMutation.mutate(serverToDelete.value.id);
+        showDeleteModal.value = false;
+        serverToDelete.value = null;
     }
 };
 
@@ -432,7 +442,7 @@ const statusColor = (status: string) => {
                                     <select v-model="formData.address_pool_id" class="input">
                                         <option value="">No IP assignment</option>
                                         <option v-for="pool in addressPools" :key="pool.id" :value="pool.id">
-                                            {{ pool.name }} ({{ pool.available_addresses || pool.addresses_count || 0 }} available)
+                                            {{ pool.name }} ({{ pool.available_count ?? pool.addresses_count ?? 0 }} available)
                                         </option>
                                     </select>
                                 </div>
@@ -469,6 +479,41 @@ const statusColor = (status: string) => {
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+        </Teleport>
+
+        <!-- Delete Confirmation Modal -->
+        <Teleport to="body">
+            <div v-if="showDeleteModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div class="fixed inset-0 bg-black/50" @click="showDeleteModal = false"></div>
+                <div class="card relative z-10 w-full max-w-md">
+                    <div class="card-header border-b border-secondary-700/50 p-4">
+                        <h2 class="text-lg font-semibold text-danger-500 flex items-center gap-2">
+                            <TrashIcon class="w-5 h-5" />
+                            Delete Server
+                        </h2>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <p class="text-secondary-300">
+                            Are you sure you want to delete server <span class="font-bold text-white">{{ serverToDelete?.name }}</span>?
+                        </p>
+                        <p class="text-sm text-secondary-400 bg-secondary-800/50 p-3 rounded border border-secondary-700">
+                            This action is permanent and cannot be undone. All data on this server will be lost.
+                        </p>
+                    </div>
+                    <div class="p-4 bg-secondary-800/30 flex gap-3 justify-end rounded-b-lg border-t border-secondary-700/50">
+                        <button @click="showDeleteModal = false" class="btn-secondary">
+                            Cancel
+                        </button>
+                        <button 
+                            @click="handleDelete" 
+                            class="btn bg-danger-500 hover:bg-danger-600 text-white border-none shadow-lg shadow-danger-500/20"
+                            :disabled="deleteMutation.isPending.value"
+                        >
+                            {{ deleteMutation.isPending.value ? 'Deleting...' : 'Delete Server' }}
+                        </button>
+                    </div>
                 </div>
             </div>
         </Teleport>

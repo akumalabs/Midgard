@@ -10,13 +10,15 @@ const uuid = route.params.uuid as string;
 const loading = ref(false);
 const error = ref('');
 const consoleUrl = ref('');
+const consoleData = ref<any>(null);
 
 const openConsole = async () => {
     loading.value = true;
     error.value = '';
     try {
         const response = await api.get(`/client/servers/${uuid}/console`);
-        const data = response.data.data;
+        consoleData.value = response.data.data;
+        const data = consoleData.value;
         
         // Build the full noVNC URL for Proxmox
         if (data && data.node && data.ticket) {
@@ -66,6 +68,13 @@ const openConsole = async () => {
             
             <p class="text-secondary-500 text-xs mt-4">
                 Note: Your browser may block the popup. Please allow popups for this site.
+            </p>
+            
+            <p v-if="consoleData?.node?.fqdn" class="text-warning-500 text-xs mt-2">
+                If connection fails, your browser may be blocking the self-signed certificate. 
+                <a :href="`https://${consoleData.node.fqdn}:8006`" target="_blank" class="underline hover:text-warning-400">
+                    Open Proxmox Panel
+                </a> once to accept the certificate.
             </p>
             
             <div v-if="consoleUrl" class="mt-6 p-4 bg-secondary-800 rounded-lg text-left">
