@@ -72,4 +72,13 @@ class ProxmoxServerRepository extends ProxmoxRepository
         }
         return false;
     }
+    
+    /**
+     * Alias for waitUntilUnlocked
+     */
+    public function waitForUnlock(int $maxAttempts = 60, int $interval = 2): bool
+    {
+        return $this->waitUntilUnlocked($maxAttempts, $interval);
+    }
 }
+

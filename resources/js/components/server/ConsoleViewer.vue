@@ -15,21 +15,22 @@ const openConsole = async () => {
     loading.value = true;
     error.value = '';
     try {
-        const { data } = await api.get(`/client/servers/${uuid}/console`);
+        const response = await api.get(`/client/servers/${uuid}/console`);
+        const data = response.data.data;
         
         // Build the full noVNC URL for Proxmox
-        if (data.node && data.ticket) {
+        if (data && data.node && data.ticket) {
             const url = `https://${data.node.fqdn}:8006/?console=kvm&novnc=1&vmid=${data.vmid}&vmname=${encodeURIComponent(data.name || '')}&node=${data.node.name}&resize=off&port=${data.port}&vncticket=${encodeURIComponent(data.ticket)}`;
             consoleUrl.value = url;
             
             // Open in new tab
             window.open(url, '_blank', 'noopener,noreferrer');
         } else {
-            error.value = "Invalid console data received.";
+            error.value = "Invalid console data received. Check node FQDN configuration.";
         }
         
     } catch (err: any) {
-        error.value = err.response?.data?.message || 'Failed to get console credentials.';
+        error.value = err.response?.data?.message || err.response?.data?.error || 'Failed to get console credentials.';
     } finally {
         loading.value = false;
     }

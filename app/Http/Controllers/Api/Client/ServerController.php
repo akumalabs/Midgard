@@ -198,7 +198,12 @@ class ServerController extends Controller
                 'data' => [
                     'ticket' => $proxy['ticket'] ?? null,
                     'port' => $proxy['port'] ?? null,
-                    'url' => "wss://{$server->node->fqdn}:{$proxy['port']}",
+                    'vmid' => $server->vmid,
+                    'name' => $server->name,
+                    'node' => [
+                        'fqdn' => $server->node->fqdn,
+                        'name' => $server->node->cluster,
+                    ],
                 ],
             ]);
 

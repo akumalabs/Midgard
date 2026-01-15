@@ -165,7 +165,7 @@ watch(() => props.show, (val) => {
                             : 'text-secondary-400 hover:text-white'"
                     >
                         <ExclamationTriangleIcon class="w-4 h-4 inline mr-2" />
-                        Danger Zone
+                        Reinstall
                     </button>
                 </div>
 
@@ -211,7 +211,7 @@ watch(() => props.show, (val) => {
                     </button>
                 </div>
 
-                <!-- Danger Zone Tab -->
+                <!-- Reinstall Tab -->
                 <div v-if="activeTab === 'danger'" class="p-4 space-y-4">
                     <div class="p-4 bg-red-500/10 border border-red-500/30 rounded-lg space-y-4">
                         <h3 class="text-red-400 font-medium">Reinstall Server</h3>
