@@ -4,23 +4,20 @@ namespace App\Services\Servers;
 
 use App\Models\Server;
 use App\Repositories\Proxmox\Server\ProxmoxCloudinitRepository;
+use App\Services\Proxmox\ProxmoxApiClient;
 
 /**
  * CloudinitService - Manages cloud-init configuration following Convoy pattern
  */
 class CloudinitService
 {
-    public function __construct(
-        protected ProxmoxCloudinitRepository $cloudinitRepository
-    ) {}
-
     /**
      * Configure cloud-init for a server.
      */
     public function configure(Server $server, array $config): void
     {
-        $cloudinitConfig = $this->buildConfig($server, $config);
-        $this->cloudinitRepository->configure($server, $cloudinitConfig);
+        $repository = $this->getRepository($server);
+        $repository->configure($this->buildConfig($server, $config));
     }
 
     /**
@@ -28,9 +25,8 @@ class CloudinitService
      */
     public function setPassword(Server $server, string $password): void
     {
-        $this->cloudinitRepository->configure($server, [
-            'cipassword' => $password,
-        ]);
+        $repository = $this->getRepository($server);
+        $repository->setPassword($password);
     }
 
     /**
@@ -38,10 +34,8 @@ class CloudinitService
      */
     public function setSshKeys(Server $server, array $keys): void
     {
-        $sshKeysString = implode("\n", $keys);
-        $this->cloudinitRepository->configure($server, [
-            'sshkeys' => urlencode($sshKeysString),
-        ]);
+        $repository = $this->getRepository($server);
+        $repository->setSshKeys($keys);
     }
 
     /**
@@ -49,29 +43,21 @@ class CloudinitService
      */
     public function setNetwork(Server $server, array $network): void
     {
-        $config = [];
-
-        if (isset($network['ip'])) {
-            $config['ipconfig0'] = sprintf(
-                'ip=%s/%s,gw=%s',
-                $network['ip'],
-                $network['cidr'] ?? 24,
-                $network['gateway']
-            );
+        $repository = $this->getRepository($server);
+        
+        if (isset($network['ip']) && isset($network['gateway'])) {
+            $ip = sprintf('%s/%s', $network['ip'], $network['cidr'] ?? 24);
+            $repository->setIpConfig($ip, $network['gateway']);
         }
+    }
 
-        if (isset($network['ip6'])) {
-            $config['ipconfig0'] = ($config['ipconfig0'] ?? '') . sprintf(
-                ',ip6=%s/%s,gw6=%s',
-                $network['ip6'],
-                $network['cidr6'] ?? 64,
-                $network['gateway6']
-            );
-        }
-
-        if (!empty($config)) {
-            $this->cloudinitRepository->configure($server, $config);
-        }
+    /**
+     * Regenerate cloud-init image.
+     */
+    public function regenerate(Server $server): void
+    {
+        $repository = $this->getRepository($server);
+        $repository->regenerate();
     }
 
     /**
@@ -83,45 +69,28 @@ class CloudinitService
 
         // User configuration
         if (isset($config['user'])) {
-            $cloudinitConfig['ciuser'] = $config['user'];
+            $cloudinitConfig['user'] = $config['user'];
         }
 
         if (isset($config['password'])) {
-            $cloudinitConfig['cipassword'] = $config['password'];
+            $cloudinitConfig['password'] = $config['password'];
         }
 
         if (isset($config['ssh_keys'])) {
-            $cloudinitConfig['sshkeys'] = urlencode(implode("\n", $config['ssh_keys']));
+            $cloudinitConfig['ssh_keys'] = $config['ssh_keys'];
         }
 
         // Network configuration
-        if (isset($config['ip']) || isset($config['ip6'])) {
-            $ipconfig = [];
-            
-            if (isset($config['ip'])) {
-                $ipconfig[] = sprintf(
-                    'ip=%s/%s,gw=%s',
-                    $config['ip'],
-                    $config['cidr'] ?? 24,
-                    $config['gateway'] ?? ''
-                );
-            }
-            
-            if (isset($config['ip6'])) {
-                $ipconfig[] = sprintf(
-                    'ip6=%s/%s,gw6=%s',
-                    $config['ip6'],
-                    $config['cidr6'] ?? 64,
-                    $config['gateway6'] ?? ''
-                );
-            }
-            
-            $cloudinitConfig['ipconfig0'] = implode(',', $ipconfig);
+        if (isset($config['ip'])) {
+            $cloudinitConfig['ip'] = sprintf('%s/%s', $config['ip'], $config['cidr'] ?? 24);
+            $cloudinitConfig['gateway'] = $config['gateway'] ?? '';
         }
 
         // DNS
         if (isset($config['nameserver'])) {
-            $cloudinitConfig['nameserver'] = $config['nameserver'];
+            $cloudinitConfig['nameservers'] = is_array($config['nameserver']) 
+                ? $config['nameserver'] 
+                : [$config['nameserver']];
         }
 
         if (isset($config['searchdomain'])) {
@@ -132,10 +101,13 @@ class CloudinitService
     }
 
     /**
-     * Regenerate cloud-init image.
+     * Get repository instance for server.
      */
-    public function regenerate(Server $server): void
+    protected function getRepository(Server $server): ProxmoxCloudinitRepository
     {
-        $this->cloudinitRepository->regenerate($server);
+        $client = new ProxmoxApiClient($server->node);
+        $repository = new ProxmoxCloudinitRepository($client);
+        $repository->setServer($server);
+        return $repository;
     }
 }

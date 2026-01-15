@@ -6,20 +6,17 @@ use App\Jobs\Node\MonitorIsoDownloadJob;
 use App\Models\Iso;
 use App\Models\Node;
 use App\Repositories\Proxmox\Node\ProxmoxStorageRepository;
+use App\Services\Proxmox\ProxmoxApiClient;
 
 /**
  * IsoService - Manages ISO images following Convoy pattern
  */
 class IsoService
 {
-    public function __construct(
-        protected ProxmoxStorageRepository $storageRepository
-    ) {}
-
     /**
      * Download an ISO from URL to node storage.
      */
-    public function download(Node $node, string $url, string $filename): Iso
+    public function download(Node $node, string $url, string $filename, string $storage = 'local'): Iso
     {
         // Create ISO record
         $iso = Iso::create([
@@ -31,12 +28,16 @@ class IsoService
         ]);
 
         // Start download on Proxmox
-        $taskId = $this->storageRepository->downloadIso($node, $url, $filename);
+        $client = new ProxmoxApiClient($node);
+        $repository = new ProxmoxStorageRepository($client);
+        $repository->setNode($node);
+        
+        $taskId = $repository->downloadIso($storage, $url, $filename);
 
-        $iso->update(['task_id' => $taskId]);
+        $iso->update(['task_id' => is_array($taskId) ? ($taskId['data'] ?? '') : $taskId]);
 
         // Dispatch job to monitor download progress
-        MonitorIsoDownloadJob::dispatch($iso, $taskId);
+        MonitorIsoDownloadJob::dispatch($iso, $iso->task_id);
 
         return $iso;
     }
@@ -44,12 +45,16 @@ class IsoService
     /**
      * Delete an ISO from node storage.
      */
-    public function delete(Iso $iso): void
+    public function delete(Iso $iso, string $storage = 'local'): void
     {
         $node = $iso->node;
 
         // Delete from Proxmox storage
-        $this->storageRepository->deleteIso($node, $iso->file_name);
+        $client = new ProxmoxApiClient($node);
+        $repository = new ProxmoxStorageRepository($client);
+        $repository->setNode($node);
+        
+        $repository->deleteVolume($storage, $iso->file_name);
 
         // Delete record
         $iso->delete();
@@ -58,17 +63,21 @@ class IsoService
     /**
      * List ISOs available on a node.
      */
-    public function list(Node $node): array
+    public function list(Node $node, string $storage = 'local'): array
     {
-        return $this->storageRepository->listIsos($node);
+        $client = new ProxmoxApiClient($node);
+        $repository = new ProxmoxStorageRepository($client);
+        $repository->setNode($node);
+        
+        return $repository->getIsos($storage);
     }
 
     /**
      * Sync ISOs from node storage to database.
      */
-    public function sync(Node $node): void
+    public function sync(Node $node, string $storage = 'local'): void
     {
-        $proxmoxIsos = $this->storageRepository->listIsos($node);
+        $proxmoxIsos = $this->list($node, $storage);
         $existingIsos = $node->isos()->pluck('file_name')->toArray();
 
         foreach ($proxmoxIsos as $isoData) {
