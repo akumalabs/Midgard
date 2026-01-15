@@ -57,13 +57,31 @@ class ServerController extends Controller
         $server = $request->user()
             ->servers()
             ->where('uuid', $uuid)
-            ->with('node')
+            ->with(['node', 'template', 'addresses'])
             ->firstOrFail();
 
         try {
             $client = new ProxmoxApiClient($server->node);
             $repository = (new ProxmoxServerRepository($client))->setServer($server);
             $state = $repository->getState();
+            
+            // Get VM config for cloud-init info
+            $config = $repository->getConfig();
+            
+            // Extract IP from ipconfig0 (format: ip=x.x.x.x/24,gw=x.x.x.x)
+            $ipAddress = null;
+            if (isset($config['ipconfig0'])) {
+                preg_match('/ip=([^\/,]+)/', $config['ipconfig0'], $matches);
+                $ipAddress = $matches[1] ?? null;
+            }
+            
+            // Fallback to database if not in config
+            if (!$ipAddress) {
+                $ipAddress = $server->primaryAddress()?->address;
+            }
+            
+            // Get OS from template name or config
+            $osName = $server->template?->name ?? 'Linux';
 
             return response()->json([
                 'data' => [
@@ -85,6 +103,10 @@ class ServerController extends Controller
                         'in' => $state->netIn,
                         'out' => $state->netOut,
                     ],
+                    // Additional info from cloud-init/config
+                    'ip_address' => $ipAddress,
+                    'os' => $osName,
+                    'vmid' => $server->vmid,
                 ],
             ]);
 

@@ -92,10 +92,14 @@ const formatUptime = (seconds: number) => {
 const cpuPercent = computed(() => status.value?.cpu ? status.value.cpu.toFixed(0) : '0');
 const memoryUsed = computed(() => formatBytes(status.value?.memory?.used || 0));
 const memoryTotal = computed(() => formatBytes(status.value?.memory?.total || server.value?.memory || 0));
+const memoryPercent = computed(() => status.value?.memory?.percentage ?? 0);
 const bandwidthUsed = computed(() => server.value?.bandwidth_usage || 0);
 const bandwidthLimit = computed(() => server.value?.bandwidth_limit || 0);
 const bandwidthPercent = computed(() => bandwidthLimit.value ? Math.min(100, (bandwidthUsed.value / bandwidthLimit.value) * 100) : 0);
-const diskUsed = computed(() => server.value?.disk || 0);
+
+// Info from status endpoint (includes Proxmox config)
+const ipAddress = computed(() => status.value?.ip_address || server.value?.ip_address || 'N/A');
+const osName = computed(() => status.value?.os || server.value?.os || 'Linux');
 </script>
 
 <template>
@@ -185,6 +189,9 @@ const diskUsed = computed(() => server.value?.disk || 0);
                             </div>
                             <p class="text-2xl font-bold text-[var(--text-base)]">{{ memoryUsed }}</p>
                             <p class="text-xs text-[var(--text-muted)] mt-1">of {{ memoryTotal }}</p>
+                            <div class="w-full bg-[var(--bg-surface-secondary)] h-1 mt-2 rounded-full overflow-hidden">
+                                <div class="bg-purple-500 h-full transition-all duration-500" :style="{ width: `${memoryPercent}%` }"></div>
+                            </div>
                         </div>
 
                          <div class="card card-body hover:border-[var(--primary-base)] transition-colors">
@@ -229,11 +236,11 @@ const diskUsed = computed(() => server.value?.disk || 0);
                                 </div>
                                 <div>
                                     <p class="text-[var(--text-muted)]">IP Address</p>
-                                    <p class="font-medium text-[var(--text-base)]">{{ server.addresses?.[0]?.address || 'N/A' }}</p>
+                                    <p class="font-medium text-[var(--text-base)]">{{ ipAddress }}</p>
                                 </div>
                                  <div>
                                     <p class="text-[var(--text-muted)]">OS</p>
-                                    <p class="font-medium text-[var(--text-base)]">Linux</p>
+                                    <p class="font-medium text-[var(--text-base)]">{{ osName }}</p>
                                 </div>
                             </div>
                         </div>
