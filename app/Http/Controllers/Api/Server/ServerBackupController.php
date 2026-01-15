@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api\Server;
 
-use App\Data\Server\Proxmox\Backup\BackupData;
 use App\Http\Controllers\Controller;
 use App\Models\Backup;
 use App\Models\Server;

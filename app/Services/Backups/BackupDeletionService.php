@@ -13,10 +13,6 @@ use App\Services\ActivityService;
  */
 class BackupDeletionService
 {
-    public function __construct(
-        protected ProxmoxBackupRepository $backupRepository
-    ) {}
-
     /**
      * Delete a backup.
      */
@@ -28,7 +24,12 @@ class BackupDeletionService
         $backup->update(['status' => 'deleting']);
 
         // Delete from Proxmox
-        $this->backupRepository->delete($server, $backup->volume_id);
+        // Extract storage from volid (format: storage:backup/filename)
+        $volid = $backup->volid;
+        $storage = explode(':', $volid)[0] ?? 'local';
+        
+        $repository = new ProxmoxBackupRepository($server);
+        $repository->delete($storage, $volid);
 
         // Dispatch job to wait for deletion
         WaitUntilBackupIsDeletedJob::dispatch($backup);

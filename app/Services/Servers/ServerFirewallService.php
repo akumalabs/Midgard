@@ -12,16 +12,18 @@ use App\Repositories\Proxmox\Server\ProxmoxFirewallRepository;
  */
 class ServerFirewallService
 {
-    public function __construct(
-        protected ProxmoxFirewallRepository $firewallRepository
-    ) {}
-
     /**
      * Enable or disable firewall.
      */
     public function toggle(Server $server, bool $enabled): void
     {
-        $this->firewallRepository->setFirewallEnabled($server, $enabled);
+        $repository = new ProxmoxFirewallRepository($server);
+        
+        if ($enabled) {
+            $repository->enable();
+        } else {
+            $repository->disable();
+        }
         
         ActivityService::forServer($server, ServerActivity::FIREWALL_UPDATE->value, [
             'enabled' => $enabled
@@ -33,7 +35,8 @@ class ServerFirewallService
      */
     public function addRule(Server $server, array $ruleData): void
     {
-        $this->firewallRepository->createRule($server, $ruleData);
+        $repository = new ProxmoxFirewallRepository($server);
+        $repository->createRule($ruleData);
         
         ActivityService::forServer($server, ServerActivity::FIREWALL_RULE_CREATE->value, [
             'rule' => $ruleData
@@ -45,7 +48,8 @@ class ServerFirewallService
      */
     public function removeRule(Server $server, int $pos): void
     {
-        $this->firewallRepository->deleteRule($server, $pos);
+        $repository = new ProxmoxFirewallRepository($server);
+        $repository->deleteRule($pos);
         
         ActivityService::forServer($server, ServerActivity::FIREWALL_RULE_DELETE->value, [
             'position' => $pos
@@ -57,12 +61,22 @@ class ServerFirewallService
      */
     public function updateRule(Server $server, int $pos, array $ruleData): void
     {
-        $this->firewallRepository->updateRule($server, $pos, $ruleData);
+        $repository = new ProxmoxFirewallRepository($server);
+        $repository->updateRule($pos, $ruleData);
         
         ActivityService::forServer($server, ServerActivity::FIREWALL_RULE_UPDATE->value, [
             'position' => $pos,
             'rule' => $ruleData
         ]);
+    }
+
+    /**
+     * Get all rules for a server.
+     */
+    public function getRules(Server $server): array
+    {
+        $repository = new ProxmoxFirewallRepository($server);
+        return $repository->getRules();
     }
 
     /**

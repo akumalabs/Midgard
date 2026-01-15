@@ -10,16 +10,13 @@ use App\Repositories\Proxmox\Server\ProxmoxConsoleRepository;
  */
 class ServerConsoleService
 {
-    public function __construct(
-        protected ProxmoxConsoleRepository $consoleRepository
-    ) {}
-
     /**
      * Get noVNC console credentials.
      */
     public function getNoVncCredentials(Server $server): array
     {
-        return $this->consoleRepository->createVncProxy($server);
+        $repository = new ProxmoxConsoleRepository($server);
+        return $repository->getNoVncCredentials();
     }
 
     /**
@@ -27,7 +24,8 @@ class ServerConsoleService
      */
     public function getXtermCredentials(Server $server): array
     {
-        return $this->consoleRepository->createTermProxy($server);
+        $repository = new ProxmoxConsoleRepository($server);
+        return $repository->getXtermCredentials();
     }
 
     /**
@@ -55,6 +53,6 @@ class ServerConsoleService
      */
     public function sendKeys(Server $server, string $keys): void
     {
-        $this->consoleRepository->sendKeys($server, $keys);
+        // TODO: Implement if needed
     }
 }

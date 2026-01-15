@@ -6,17 +6,12 @@ use App\Models\Server;
 use App\Services\ActivityService;
 use App\Enums\Activity\ServerActivity;
 use App\Repositories\Proxmox\Server\ProxmoxConfigRepository;
-use App\Data\Server\Proxmox\Config\NetworkDeviceData;
 
 /**
  * ServerNetworkService - Manages server network interfaces following Convoy pattern
  */
 class ServerNetworkService
 {
-    public function __construct(
-        protected ProxmoxConfigRepository $configRepository
-    ) {}
-
     /**
      * Update network configuration for a server.
      */
@@ -31,10 +26,9 @@ class ServerNetworkService
         }
 
         // Apply to Proxmox
-        $this->configRepository->update($server, $config);
+        $repository = new ProxmoxConfigRepository($server);
+        $repository->update($config);
 
-        // storage updates in local DB if needed (usually handled by sync job)
-        
         ActivityService::forServer($server, ServerActivity::NETWORK_UPDATE->value);
     }
 
@@ -56,7 +50,8 @@ class ServerNetworkService
             $key => $this->buildInterfaceString($data)
         ];
 
-        $this->configRepository->update($server, $config);
+        $repository = new ProxmoxConfigRepository($server);
+        $repository->update($config);
         
         ActivityService::forServer($server, ServerActivity::NETWORK_UPDATE->value, [
             'interface' => $key,
@@ -71,10 +66,9 @@ class ServerNetworkService
     {
         $key = "net{$index}";
         
-        // In Proxmox, setting to null deletes it
-        $this->configRepository->update($server, [
-            $key => null
-        ]);
+        // In Proxmox, setting delete parameter removes the config
+        $repository = new ProxmoxConfigRepository($server);
+        $repository->update(['delete' => $key]);
 
         ActivityService::forServer($server, ServerActivity::NETWORK_UPDATE->value, [
             'interface' => $key,
@@ -82,20 +76,38 @@ class ServerNetworkService
         ]);
     }
 
+    /**
+     * Get current interfaces for a server.
+     */
+    public function getInterfaces(Server $server): array
+    {
+        $repository = new ProxmoxConfigRepository($server);
+        $config = $repository->get();
+        
+        $interfaces = [];
+        for ($i = 0; $i < 8; $i++) {
+            $key = "net{$i}";
+            if (isset($config[$key])) {
+                $interfaces[] = $this->parseInterfaceString($config[$key], $i);
+            }
+        }
+        
+        return $interfaces;
+    }
+
     protected function buildInterfaceString(array $data): string
     {
         // Format: model=virtio,macaddr=XX:XX...,bridge=vmbr0,firewall=1,rate=10
         $parts = [];
         
-        $parts[] = 'model=' . ($data['model'] ?? 'virtio');
-        $parts[] = 'macaddr=' . $data['mac_address'];
+        $parts[] = ($data['model'] ?? 'virtio') . '=' . $data['mac_address'];
         $parts[] = 'bridge=' . ($data['bridge'] ?? 'vmbr0');
         
         if (isset($data['firewall'])) {
             $parts[] = 'firewall=' . ($data['firewall'] ? '1' : '0');
         }
         
-        if (isset($data['rate_limit'])) {
+        if (isset($data['rate_limit']) && $data['rate_limit'] > 0) {
             $parts[] = 'rate=' . $data['rate_limit'];
         }
 
@@ -106,18 +118,45 @@ class ServerNetworkService
         return implode(',', $parts);
     }
 
+    protected function parseInterfaceString(string $value, int $index): array
+    {
+        // Parse format: model=mac,bridge=vmbr0,firewall=1,...
+        $parts = explode(',', $value);
+        $interface = ['device' => "net{$index}"];
+        
+        foreach ($parts as $part) {
+            if (strpos($part, '=') !== false) {
+                [$key, $val] = explode('=', $part, 2);
+                $interface[$key] = $val;
+            } else {
+                // First part is usually model=mac
+                if (preg_match('/^(virtio|e1000|rtl8139)=(.+)/', $part, $m)) {
+                    $interface['model'] = $m[1];
+                    $interface['mac'] = $m[2];
+                }
+            }
+        }
+        
+        return $interface;
+    }
+
     protected function getNextAvailableIndex(Server $server): int
     {
-        // This would typically query current config to find gap
-        // Simplified for now assuming sequential append
-        // Real implementation should fetch current config via repository
-        return 1; // Placeholder: impl should fetch current count
+        $repository = new ProxmoxConfigRepository($server);
+        $config = $repository->get();
+        
+        for ($i = 0; $i < 8; $i++) {
+            if (!isset($config["net{$i}"])) {
+                return $i;
+            }
+        }
+        
+        throw new \Exception('Maximum of 8 network interfaces reached.');
     }
 
     protected function generateMacAddress(): string
     {
-        // Generate random MAC with private OUI
-        // 02:00:00 - 02:FF:FF:FF:FF:FF is locally administered
+        // Generate random MAC with private OUI (locally administered)
         return sprintf(
             '02:%02X:%02X:%02X:%02X:%02X',
             rand(0, 255),

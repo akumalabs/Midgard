@@ -14,10 +14,6 @@ use App\Services\ActivityService;
  */
 class BackupCreationService
 {
-    public function __construct(
-        protected ProxmoxBackupRepository $backupRepository
-    ) {}
-
     /**
      * Create a new backup for the server.
      */
@@ -31,16 +27,13 @@ class BackupCreationService
             'server_id' => $server->id,
             'name' => $this->generateBackupName($server),
             'status' => 'creating',
-            'mode' => $mode,
-            'compression' => $compression,
         ]);
 
-        // Start backup on Proxmox
-        $taskId = $this->backupRepository->create($server, [
-            'mode' => $mode,
-            'compress' => $compression,
-            'storage' => $server->node->backup_storage ?? 'local',
-        ]);
+        // Start backup on Proxmox using repository
+        $storage = $server->node->backup_storage ?? 'local';
+        
+        $repository = new ProxmoxBackupRepository($server);
+        $taskId = $repository->create($storage, $mode, $compression);
 
         $backup->update(['task_id' => $taskId]);
 

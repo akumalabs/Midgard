@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Server;
 
 use App\Http\Controllers\Controller;
 use App\Models\Server;
+use App\Repositories\Proxmox\Server\ProxmoxFirewallRepository;
 use App\Services\Servers\ServerFirewallService;
 use Illuminate\Http\Request;
 
@@ -20,8 +21,7 @@ class ServerFirewallController extends Controller
     {
         $this->authorize('view', $server);
         
-        // Ensure Repository is available to fetch rules
-        $rules = app(\App\Repositories\Proxmox\Server\ProxmoxFirewallRepository::class)->getRules($server);
+        $rules = $this->firewallService->getRules($server);
 
         return response()->json(['rules' => $rules]);
     }

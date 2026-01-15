@@ -13,10 +13,6 @@ use App\Services\ActivityService;
  */
 class RestoreFromBackupService
 {
-    public function __construct(
-        protected ProxmoxBackupRepository $backupRepository
-    ) {}
-
     /**
      * Restore a server from backup.
      */
@@ -28,7 +24,8 @@ class RestoreFromBackupService
         $backup->update(['status' => 'restoring']);
 
         // Restore from Proxmox
-        $taskId = $this->backupRepository->restore($server, $backup->volume_id);
+        $repository = new ProxmoxBackupRepository($server);
+        $taskId = $repository->restore($backup->volid);
 
         $backup->update(['task_id' => $taskId]);
 
