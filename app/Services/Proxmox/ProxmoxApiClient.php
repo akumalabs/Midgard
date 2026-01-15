@@ -55,10 +55,11 @@ class ProxmoxApiClient
 
     /**
      * Make a POST request to the Proxmox API.
+     * Proxmox expects form-encoded data, not JSON.
      */
     public function post(string $path, array $data = []): array|string
     {
-        $response = $this->client->post($path, $data);
+        $response = $this->client->asForm()->post($path, $data);
         return $this->handleResponse($response);
     }
 
@@ -67,7 +68,7 @@ class ProxmoxApiClient
      */
     public function put(string $path, array $data = []): array|string
     {
-        $response = $this->client->put($path, $data);
+        $response = $this->client->asForm()->put($path, $data);
         return $this->handleResponse($response);
     }
 
@@ -76,7 +77,7 @@ class ProxmoxApiClient
      */
     public function delete(string $path, array $data = []): array|string
     {
-        $response = $this->client->delete($path, $data);
+        $response = $this->client->asForm()->delete($path, $data);
         return $this->handleResponse($response);
     }
 
@@ -178,11 +179,12 @@ class ProxmoxApiClient
 
     /**
      * Start a VM. Returns UPID.
+     * Note: start endpoint doesn't accept timeout parameter
      */
     public function startVM(int $vmid, string $nodeName = null): array|string
     {
         $nodeName = $nodeName ?? $this->getProxmoxNodeName();
-        return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/start", ['timeout' => 30]);
+        return $this->post("/nodes/{$nodeName}/qemu/{$vmid}/status/start", []);
     }
 
     /**
