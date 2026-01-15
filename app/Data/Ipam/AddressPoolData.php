@@ -15,6 +15,9 @@ class AddressPoolData extends Data
         public int $total_addresses,
         public int $available_addresses,
         public int $assigned_addresses,
+        // Frontend compatibility aliases
+        public int $addresses_count,
+        public int $nodes_count,
         /** @var array<int, NodeSummaryData> */
         public array $nodes,
         public ?string $created_at,
@@ -24,6 +27,7 @@ class AddressPoolData extends Data
     {
         $totalAddresses = $pool->addresses_count ?? $pool->addresses->count();
         $availableAddresses = $pool->available_count ?? $pool->addresses->whereNull('server_id')->count();
+        $nodesCount = $pool->nodes_count ?? $pool->nodes->count();
         
         return new self(
             id: $pool->id,
@@ -31,6 +35,9 @@ class AddressPoolData extends Data
             total_addresses: $totalAddresses,
             available_addresses: $availableAddresses,
             assigned_addresses: $totalAddresses - $availableAddresses,
+            // Frontend expects these field names
+            addresses_count: $totalAddresses,
+            nodes_count: $nodesCount,
             nodes: $pool->nodes->map(fn($n) => [
                 'id' => $n->id,
                 'name' => $n->name,

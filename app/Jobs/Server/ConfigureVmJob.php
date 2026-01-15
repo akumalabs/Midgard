@@ -45,20 +45,35 @@ class ConfigureVmJob implements ShouldQueue
         // Wait for VM to be unlocked
         $serverRepo->waitForUnlock();
         
-        // Update CPU and memory
+        // Update CPU, memory, and ensure name is set
         $configRepo->update([
+            'name' => $this->server->name,
             'cores' => $this->server->cpu,
-            'memory' => $this->server->memory / 1048576, // bytes to MB
+            'memory' => (int) ($this->server->memory / 1048576), // bytes to MB
         ]);
         
-        // Resize disk
-        $diskSize = ceil($this->server->disk / 1073741824); // bytes to GB
-        $client->resizeDisk($this->server->vmid, 'scsi0', "{$diskSize}G");
-        
-        // Configure cloud-init
-        if ($this->password) {
-            $cloudinitRepo->setPassword($this->password);
+        // Resize disk - convert bytes to GB for Proxmox
+        $diskSizeBytes = $this->server->disk;
+        $diskSizeGb = (int) ceil($diskSizeBytes / 1073741824);
+        if ($diskSizeGb > 0) {
+            try {
+                $client->resizeDisk($this->server->vmid, 'scsi0', $diskSizeBytes);
+            } catch (\Exception $e) {
+                logger()->warning("Failed to resize disk: " . $e->getMessage());
+            }
         }
+        
+        // Configure cloud-init user and hostname
+        $cloudinitConfig = [
+            'ciuser' => 'root',
+        ];
+        
+        if ($this->password) {
+            $cloudinitConfig['cipassword'] = $this->password;
+        }
+        
+        // Set hostname via cloud-init (searchdomain can help with FQDN)
+        $cloudinitRepo->configure($cloudinitConfig);
         
         // Allocate IP addresses
         if (!empty($this->addressIds)) {
@@ -77,6 +92,7 @@ class ConfigureVmJob implements ShouldQueue
         // Start the VM
         try {
             $powerRepo->start();
+            logger()->info("Server {$this->server->vmid} started successfully");
         } catch (\Exception $e) {
             logger()->warning("Failed to start VM after config: " . $e->getMessage());
         }
@@ -87,7 +103,6 @@ class ConfigureVmJob implements ShouldQueue
     protected function configureNetwork(ProxmoxCloudinitRepository $cloudinitRepo): void
     {
         $addresses = \App\Models\Address::whereIn('id', $this->addressIds)->get();
-        $addressService = app(AddressService::class);
         
         foreach ($addresses as $index => $address) {
             $address->update([
@@ -95,7 +110,7 @@ class ConfigureVmJob implements ShouldQueue
                 'is_primary' => $index === 0,
             ]);
             
-            // Configure cloud-init network
+            // Configure cloud-init network for primary interface
             if ($index === 0) {
                 $cloudinitRepo->setIpConfig(
                     "{$address->address}/{$address->cidr}",
