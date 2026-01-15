@@ -41,6 +41,7 @@ class ServerBuildService
         $server = Server::create([
             'uuid' => (string) Str::uuid(),
             'node_id' => $node->id,
+            'template_id' => $template->id,
             'user_id' => $userId,
             'name' => $name,
             'vmid' => $vmid,

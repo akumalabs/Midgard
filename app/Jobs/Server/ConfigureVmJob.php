@@ -55,6 +55,7 @@ class ConfigureVmJob implements ShouldQueue
             'name' => $this->server->name,
             'cores' => $this->server->cpu,
             'memory' => (int) ($this->server->memory / 1048576), // bytes to MB
+            'agent' => 1, // Enable QEMU Guest Agent
         ];
         $configRepo->update($vmConfig);
         

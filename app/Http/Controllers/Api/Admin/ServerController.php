@@ -205,6 +205,7 @@ class ServerController extends Controller
             $server = Server::create([
                 'user_id' => $validated['user_id'],
                 'node_id' => $validated['node_id'],
+                'template_id' => $template?->id,
                 'vmid' => (string) $vmid,
                 'name' => $validated['name'],
                 'hostname' => $validated['hostname'],
@@ -417,6 +418,8 @@ class ServerController extends Controller
             'vmid' => $server->vmid,
             'name' => $server->name,
             'hostname' => $server->hostname,
+            'ip_address' => $server->primaryAddress()?->address ?? 'N/A',
+            'os' => $server->template?->name ?? 'Linux',
             'status' => $server->status,
             'is_suspended' => $server->is_suspended,
             'cpu' => $server->cpu,

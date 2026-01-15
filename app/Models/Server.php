@@ -15,6 +15,7 @@ class Server extends Model
     protected $fillable = [
         'user_id',
         'node_id',
+        'template_id',
         'vmid',
         'name',
         'hostname',
@@ -67,6 +68,14 @@ class Server extends Model
     public function node(): BelongsTo
     {
         return $this->belongsTo(Node::class);
+    }
+    
+    /**
+     * Get the template used for this server.
+     */
+    public function template(): BelongsTo
+    {
+        return $this->belongsTo(Template::class);
     }
 
     /**

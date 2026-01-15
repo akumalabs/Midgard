@@ -283,6 +283,11 @@ class ServerController extends Controller
 
         $template = \App\Models\Template::findOrFail($request->template_id);
 
+        // Update server template
+        $server->update([
+            'template_id' => $template->id,
+        ]);
+
         // Create deployment with steps for tracking
         $deploymentService = app(\App\Services\Servers\DeploymentService::class);
         $deployment = $deploymentService->create($server, [
@@ -590,8 +595,11 @@ class ServerController extends Controller
         $data = [
             'id' => $server->id,
             'uuid' => $server->uuid,
+            'vmid' => $server->vmid,
             'name' => $server->name,
             'hostname' => $server->hostname,
+            'ip_address' => $server->primaryAddress()?->address ?? 'N/A',
+            'os' => $server->template?->name ?? 'Linux',
             'status' => $server->status,
             'is_suspended' => $server->is_suspended,
             'cpu' => $server->cpu,
